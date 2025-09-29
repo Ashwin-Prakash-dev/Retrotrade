@@ -121,6 +121,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchCompany(symbol);
   }
 
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _stockData = null;
+      _currentSymbol = null;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,6 +137,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Stock Analysis'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          if (_stockData != null)
+            IconButton(
+              icon: const Icon(Icons.home),
+              onPressed: _clearSearch,
+              tooltip: 'Back to Home',
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadMarketData,
