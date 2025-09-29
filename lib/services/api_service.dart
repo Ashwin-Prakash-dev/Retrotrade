@@ -113,6 +113,103 @@ class ApiService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> screenStocks({
+    bool useRsi = false,
+    double rsiMin = 30.0,
+    double rsiMax = 70.0,
+    bool useMacd = false,
+    String macdSignal = 'any',
+    bool useVwap = false,
+    String vwapPosition = 'any',
+    bool usePe = false,
+    double peMin = 5.0,
+    double peMax = 30.0,
+    bool useMarketCap = false,
+    double marketCapMin = 1000000000,
+    double marketCapMax = 1000000000000,
+    bool useVolume = false,
+    double volumeMin = 1000000,
+    bool usePrice = false,
+    double priceMin = 1.0,
+    double priceMax = 1000.0,
+    String sector = 'any',
+  }) async {
+    try {
+      final Map<String, dynamic> requestBody = {
+        'filters': <String, dynamic>{},
+      };
+
+      // Add filters based on what's enabled
+      if (useRsi) {
+        requestBody['filters']['rsi'] = {
+          'min': rsiMin,
+          'max': rsiMax,
+        };
+      }
+
+      if (useMacd) {
+        requestBody['filters']['macd'] = {
+          'signal': macdSignal,
+        };
+      }
+
+      if (useVwap) {
+        requestBody['filters']['vwap'] = {
+          'position': vwapPosition,
+        };
+      }
+
+      if (usePe) {
+        requestBody['filters']['pe_ratio'] = {
+          'min': peMin,
+          'max': peMax,
+        };
+      }
+
+      if (useMarketCap) {
+        requestBody['filters']['market_cap'] = {
+          'min': marketCapMin,
+          'max': marketCapMax,
+        };
+      }
+
+      if (useVolume) {
+        requestBody['filters']['volume'] = {
+          'min': volumeMin,
+        };
+      }
+
+      if (usePrice) {
+        requestBody['filters']['price'] = {
+          'min': priceMin,
+          'max': priceMax,
+        };
+      }
+
+      if (sector != 'any') {
+        requestBody['filters']['sector'] = sector;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/screen-stocks'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final List<dynamic> stocks = responseData['stocks'] ?? [];
+        return stocks.cast<Map<String, dynamic>>();
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw errorData['detail'] ?? 'Stock screening failed';
+      }
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to connect to server: $e';
+    }
+  }
+
   Future<bool> checkConnection() async {
     try {
       final response = await http.get(

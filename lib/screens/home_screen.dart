@@ -5,6 +5,7 @@ import '../widgets/technical_analysis_card.dart';
 import '../widgets/sentiment_card.dart';
 import '../widgets/stock_autocomplete.dart';
 import 'backtest_screen.dart';
+import 'stock_screener_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -70,6 +71,18 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StockScreenerScreen(),
+                ),
+              );
+            },
+            tooltip: 'Stock Screener',
+          ),
+          IconButton(
             icon: const Icon(Icons.analytics),
             onPressed: () {
               Navigator.push(
@@ -89,6 +102,60 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // Quick Actions Row
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const StockScreenerScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.filter_list),
+                        label: const Text('Stock Screener'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade100,
+                          foregroundColor: Colors.green.shade800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _currentSymbol != null
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => BacktestScreen(
+                                      initialTicker: _currentSymbol!,
+                                    ),
+                                  ),
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.analytics),
+                        label: const Text('Backtest'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade100,
+                          foregroundColor: Colors.blue.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Search Bar with Autocomplete
             StockAutocomplete(
               controller: _searchController,
@@ -133,18 +200,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
 
                     if (_stockData == null && !_isLoading && _error == null)
-                      const Card(
+                      Card(
                         child: Padding(
-                          padding: EdgeInsets.all(32.0),
+                          padding: const EdgeInsets.all(32.0),
                           child: Column(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.search,
                                 size: 64,
                                 color: Colors.grey,
                               ),
-                              SizedBox(height: 16),
-                              Text(
+                              const SizedBox(height: 16),
+                              const Text(
                                 'Start typing a stock symbol or company name to search',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -152,8 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   color: Colors.grey,
                                 ),
                               ),
-                              SizedBox(height: 8),
-                              Text(
+                              const SizedBox(height: 8),
+                              const Text(
                                 'Examples: AAPL, Apple, Microsoft, TSLA',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -161,6 +228,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   color: Colors.grey,
                                   fontStyle: FontStyle.italic,
                                 ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => const StockScreenerScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.filter_list),
+                                    label: const Text('Try Stock Screener'),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
