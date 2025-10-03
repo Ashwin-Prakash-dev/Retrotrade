@@ -23,6 +23,23 @@ class StockSuggestion {
   }
 }
 
+class PortfolioStock {
+  final String ticker;
+  final double allocation;
+
+  PortfolioStock({
+    required this.ticker,
+    required this.allocation,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ticker': ticker,
+      'allocation': allocation,
+    };
+  }
+}
+
 class ApiService {
   // API URL based on platform
   String get baseUrl {
@@ -46,11 +63,9 @@ class ApiService {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((item) => StockSuggestion.fromJson(item)).toList();
       } else {
-        // Return empty list on error rather than throwing
         return [];
       }
     } catch (e) {
-      // Return empty list on network error
       return [];
     }
   }
@@ -113,6 +128,47 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> runPortfolioBacktest({
+    required List<PortfolioStock> stocks,
+    required String startDate,
+    required String endDate,
+    required int rsiPeriod,
+    required int rsiBuy,
+    required int rsiSell,
+    required double initialCash,
+    bool rebalance = false,
+    String rebalanceFrequency = 'monthly',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/backtest-portfolio'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stocks': stocks.map((s) => s.toJson()).toList(),
+          'start_date': startDate,
+          'end_date': endDate,
+          'strategy': 'RSI',
+          'rsi_period': rsiPeriod,
+          'rsi_buy': rsiBuy,
+          'rsi_sell': rsiSell,
+          'initial_cash': initialCash,
+          'rebalance': rebalance,
+          'rebalance_frequency': rebalanceFrequency,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw errorData['detail'] ?? 'Portfolio backtest failed';
+      }
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to connect to server: $e';
+    }
+  }
+
   Future<List<Map<String, dynamic>>> screenStocks({
     bool useRsi = false,
     double rsiMin = 30.0,
@@ -139,7 +195,6 @@ class ApiService {
         'filters': <String, dynamic>{},
       };
 
-      // Add filters based on what's enabled
       if (useRsi) {
         requestBody['filters']['rsi'] = {
           'min': rsiMin,

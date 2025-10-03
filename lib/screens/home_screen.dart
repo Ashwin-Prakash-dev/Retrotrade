@@ -503,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: news.length,
         separatorBuilder: (context, index) => Divider(
           height: 1,
-          color: Colors.grey.shade300,
+          color: const Color.fromARGB(255, 139, 170, 118),
         ),
         itemBuilder: (context, index) {
           final item = news[index];
@@ -578,7 +578,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
+    if (hour < 12) return 'Mornin';
     if (hour < 17) return 'Afternoon';
     return 'Evening';
   }
