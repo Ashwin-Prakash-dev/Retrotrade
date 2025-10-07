@@ -26,6 +26,16 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingMarketData = true;
   Map<String, dynamic> _marketData = {};
 
+  static const Color primaryBg = Color(0xFF0A0E27);
+  static const Color secondaryBg = Color(0xFF121836);
+  static const Color cardBg = Color(0xFF1A2138);
+  static const Color accentCyan = Color(0xFF00F5FF);
+  static const Color accentPurple = Color(0xFF8B5CF6);
+  static const Color accentGreen = Color(0xFF00FF88);
+  static const Color accentRed = Color(0xFFFF0055);
+  static const Color textPrimary = Color(0xFFE2E8F0);
+  static const Color textSecondary = Color(0xFF94A3B8);
+
   @override
   void initState() {
     super.initState();
@@ -38,10 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // TODO: Replace with actual API calls
       await Future.delayed(const Duration(milliseconds: 800));
       
-      // Mock data - replace with actual API service calls
       setState(() {
         _marketData = {
           'indices': [
@@ -133,126 +141,194 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: primaryBg,
       appBar: AppBar(
-        title: const Text('Stock Analysis'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [accentCyan, accentPurple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentCyan.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.auto_graph, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'RETROTRADE',
+              style: TextStyle(
+                color: textPrimary,
+                fontWeight: FontWeight.w300,
+                letterSpacing: 2,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: secondaryBg,
+        elevation: 0,
         actions: [
           if (_stockData != null)
             IconButton(
-              icon: const Icon(Icons.home),
+              icon: Icon(Icons.home_outlined, color: accentCyan),
               onPressed: _clearSearch,
               tooltip: 'Back to Home',
             ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh_outlined, color: accentCyan),
             onPressed: _loadMarketData,
             tooltip: 'Refresh Market Data',
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Search Bar with Autocomplete
-            StockAutocomplete(
-              controller: _searchController,
-              onStockSelected: _onStockSelected,
-              onSearch: () => _searchCompany(),
-              isLoading: _isLoading,
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [secondaryBg, primaryBg],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+ 
+              StockAutocomplete(
+                controller: _searchController,
+                onStockSelected: _onStockSelected,
+                onSearch: () => _searchCompany(),
+                isLoading: _isLoading,
+              ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Results
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    if (_error != null)
-                      Card(
-                        color: const Color.fromARGB(255, 4, 63, 41),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error, color: Colors.red.shade700),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _error!,
-                                  style: TextStyle(color: Colors.red.shade700),
+              // Results
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      if (_error != null)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: accentRed.withOpacity(0.1),
+                            border: Border.all(color: accentRed.withOpacity(0.3)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded, color: accentRed),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _error!,
+                                    style: TextStyle(color: accentRed, fontWeight: FontWeight.w500),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
 
-                    if (_stockData != null) ...[
-                      CompanyInfoCard(stockData: _stockData!),
-                      const SizedBox(height: 16),
-                      TechnicalAnalysisCard(stockData: _stockData!),
-                      const SizedBox(height: 16),
-                      SentimentCard(stockData: _stockData!),
+                      if (_stockData != null) ...[
+                        CompanyInfoCard(stockData: _stockData!),
+                        const SizedBox(height: 16),
+                        TechnicalAnalysisCard(stockData: _stockData!),
+                        const SizedBox(height: 16),
+                        SentimentCard(stockData: _stockData!),
+                      ],
+
+                      // Market Overview - shown when no stock is searched
+                      if (_stockData == null && !_isLoading && _error == null)
+                        _buildMarketOverview(),
                     ],
-
-                    // Market Overview - shown when no stock is searched
-                    if (_stockData == null && !_isLoading && _error == null)
-                      _buildMarketOverview(),
-                  ],
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: secondaryBg,
+          boxShadow: [
+            BoxShadow(
+              color: accentCyan.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (index) {
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StockScreenerScreen(),
-              ),
-            );
-          } else if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => BacktestScreen(
-                  initialTicker: _currentSymbol,
+        child: BottomNavigationBar(
+          backgroundColor: Colors.transparent,
+          currentIndex: 0,
+          selectedItemColor: accentCyan,
+          unselectedItemColor: textSecondary,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          onTap: (index) {
+            if (index == 1) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StockScreenerScreen(),
                 ),
-              ),
-            );
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.filter_list),
-            label: 'Screener',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics),
-            label: 'Backtest',
-          ),
-        ],
+              );
+            } else if (index == 2) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BacktestScreen(
+                    initialTicker: _currentSymbol,
+                  ),
+                ),
+              );
+            }
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.filter_list_outlined),
+              activeIcon: Icon(Icons.filter_list),
+              label: 'Screener',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.analytics_outlined),
+              activeIcon: Icon(Icons.analytics),
+              label: 'Backtest',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMarketOverview() {
     if (_isLoadingMarketData) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(32.0),
-          child: Center(
-            child: CircularProgressIndicator(),
+      return Container(
+        padding: const EdgeInsets.all(48.0),
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(accentCyan),
+            strokeWidth: 3,
           ),
         ),
       );
@@ -262,31 +338,61 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Welcome Message
-        Card(
-          color: Colors.blue.shade50,
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [accentCyan.withOpacity(0.15), accentPurple.withOpacity(0.15)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: accentCyan.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20.0),
             child: Row(
               children: [
-                Icon(Icons.wb_sunny, color: Colors.orange.shade700, size: 32),
-                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [accentCyan, accentPurple],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentCyan.withOpacity(0.4),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.wb_sunny_outlined, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Good ${_getGreeting()}!',
+                        'GOOD ${_getGreeting().toUpperCase()}',
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary,
+                          letterSpacing: 1.5,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Here\'s what\'s happening in the markets today',
+                        'Real-time market intelligence at your fingertips',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
+                          fontSize: 13,
+                          color: textSecondary,
+                          fontWeight: FontWeight.w300,
                         ),
                       ),
                     ],
@@ -297,25 +403,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
         // Major Indices
-        _buildSectionHeader('Major Indices', Icons.trending_up),
-        const SizedBox(height: 8),
+        _buildSectionHeader('GLOBAL INDICES', Icons.trending_up),
+        const SizedBox(height: 12),
         _buildIndicesGrid(),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
         // Commodities
-        _buildSectionHeader('Commodities', Icons.bar_chart),
-        const SizedBox(height: 8),
+        _buildSectionHeader('COMMODITIES', Icons.diamond_outlined),
+        const SizedBox(height: 12),
         _buildCommoditiesCard(),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
         // Economic News
-        _buildSectionHeader('Market News', Icons.newspaper),
-        const SizedBox(height: 8),
+        _buildSectionHeader('MARKET PULSE', Icons.newspaper_outlined),
+        const SizedBox(height: 12),
         _buildNewsCard(),
       ],
     );
@@ -324,14 +430,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: Colors.blue.shade700),
+        Icon(icon, size: 18, color: accentCyan),
         const SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade800,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: textSecondary,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accentCyan.withOpacity(0.3), Colors.transparent],
+              ),
+            ),
           ),
         ),
       ],
@@ -347,56 +465,83 @@ class _HomeScreenState extends State<HomeScreen> {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         childAspectRatio: 1.5,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
       ),
       itemCount: indices.length,
       itemBuilder: (context, index) {
         final item = indices[index];
         final isPositive = (item['change'] ?? 0.0) >= 0;
         
-        return Card(
-          elevation: 2,
+        return Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPositive 
+                  ? accentGreen.withOpacity(0.2)
+                  : accentRed.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (isPositive ? accentGreen : accentRed).withOpacity(0.1),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(14.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  item['name'],
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item['name'],
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (isPositive ? accentGreen : accentRed).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Icon(
+                        isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 12,
+                        color: isPositive ? accentGreen : accentRed,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   item['value'].toStringAsFixed(2),
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
                   ),
                 ),
-                Row(
-                  children: [
-                    Icon(
-                      isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                      size: 14,
-                      color: isPositive ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${item['change'].toStringAsFixed(2)} (${item['changePercent'].toStringAsFixed(2)}%)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isPositive ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '${item['change'].toStringAsFixed(2)} (${item['changePercent'].toStringAsFixed(2)}%)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isPositive ? accentGreen : accentRed,
+                  ),
                 ),
               ],
             ),
@@ -409,69 +554,98 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCommoditiesCard() {
     final commodities = _marketData['commodities'] as List<dynamic>? ?? [];
     
-    return Card(
-      elevation: 2,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: commodities.length,
         separatorBuilder: (context, index) => Divider(
           height: 1,
-          color: Colors.grey.shade300,
+          color: textSecondary.withOpacity(0.1),
         ),
         itemBuilder: (context, index) {
           final item = commodities[index];
           final isPositive = (item['change'] ?? 0.0) >= 0;
           
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.amber.shade100,
-              child: Icon(
-                _getCommodityIcon(item['name']),
-                color: Colors.amber.shade800,
-                size: 20,
-              ),
-            ),
-            title: Text(
-              item['name'],
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-            subtitle: Text(
-              item['unit'],
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
               children: [
-                Text(
-                  '\$${item['value'].toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [accentCyan.withOpacity(0.2), accentPurple.withOpacity(0.2)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _getCommodityIcon(item['name']),
+                    color: accentCyan,
+                    size: 20,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                      size: 12,
-                      color: isPositive ? Colors.green : Colors.red,
-                    ),
-                    Text(
-                      item['change'].abs().toStringAsFixed(2),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isPositive ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['name'],
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: textPrimary,
+                        ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item['unit'],
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '\$${item['value'].toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: 12,
+                          color: isPositive ? accentGreen : accentRed,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          item['change'].abs().toStringAsFixed(2),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isPositive ? accentGreen : accentRed,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -486,68 +660,104 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNewsCard() {
     final news = _marketData['news'] as List<dynamic>? ?? [];
     
-    return Card(
-      elevation: 2,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentPurple.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: news.length,
         separatorBuilder: (context, index) => Divider(
           height: 1,
-          color: Colors.grey.shade300,
+          color: textSecondary.withOpacity(0.1),
         ),
         itemBuilder: (context, index) {
           final item = news[index];
           
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.blue.shade100,
-              child: Icon(
-                Icons.article,
-                color: Colors.blue.shade800,
-                size: 20,
-              ),
-            ),
-            title: Text(
-              item['title'],
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4.0),
+          return InkWell(
+            onTap: () {
+              // TODO: Open news article
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  Text(
-                    item['source'],
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [accentPurple.withOpacity(0.2), accentCyan.withOpacity(0.2)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.article_outlined,
+                      color: accentPurple,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '• ${item['time']}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['title'],
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: accentCyan.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                item['source'],
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: accentCyan,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '• ${item['time']}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: textSecondary.withOpacity(0.5),
                   ),
                 ],
               ),
             ),
-            trailing: Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: Colors.grey.shade400,
-            ),
-            onTap: () {
-              // TODO: Open news article
-            },
           );
         },
       ),
@@ -557,11 +767,11 @@ class _HomeScreenState extends State<HomeScreen> {
   IconData _getCommodityIcon(String name) {
     switch (name.toLowerCase()) {
       case 'gold':
-        return Icons.monetization_on;
+        return Icons.monetization_on_outlined;
       case 'crude oil':
-        return Icons.oil_barrel;
+        return Icons.oil_barrel_outlined;
       case 'silver':
-        return Icons.diamond;
+        return Icons.diamond_outlined;
       default:
         return Icons.bar_chart;
     }
