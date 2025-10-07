@@ -16,7 +16,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
   final _formKey = GlobalKey<FormState>();
   
   // Controllers
-  final _tickerController = TextEditingController();
   final _rsiPeriodController = TextEditingController(text: '14');
   final _rsiBuyController = TextEditingController(text: '30');
   final _rsiSellController = TextEditingController(text: '70');
@@ -26,7 +25,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _results;
   String? _error;
-  bool _isPortfolioMode = false;
   
   // Date range
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 365));
@@ -40,8 +38,12 @@ class _BacktestScreenState extends State<BacktestScreen> {
   @override
   void initState() {
     super.initState();
+    // If initial ticker is provided, add it to portfolio with 100% allocation
     if (widget.initialTicker != null) {
-      _tickerController.text = widget.initialTicker!;
+      _portfolioStocks.add(PortfolioStockInput(
+        ticker: widget.initialTicker!,
+        allocation: 100.0,
+      ));
     }
   }
 
@@ -84,46 +86,32 @@ class _BacktestScreenState extends State<BacktestScreen> {
     });
 
     try {
-      Map<String, dynamic> results;
-      
-      if (_isPortfolioMode) {
-        if (_portfolioStocks.isEmpty) {
-          throw 'Please add at least one stock to the portfolio';
-        }
-        
-        final totalAllocation = _portfolioStocks.fold<double>(
-          0, (sum, stock) => sum + stock.allocation
-        );
-        
-        if ((totalAllocation - 100.0).abs() > 0.01) {
-          throw 'Portfolio allocations must sum to 100% (current: ${totalAllocation.toStringAsFixed(1)}%)';
-        }
-        
-        results = await _apiService.runPortfolioBacktest(
-          stocks: _portfolioStocks.map((s) => PortfolioStock(
-            ticker: s.ticker,
-            allocation: s.allocation,
-          )).toList(),
-          startDate: _formatDate(_startDate),
-          endDate: _formatDate(_endDate),
-          rsiPeriod: int.parse(_rsiPeriodController.text),
-          rsiBuy: int.parse(_rsiBuyController.text),
-          rsiSell: int.parse(_rsiSellController.text),
-          initialCash: double.parse(_initialCashController.text),
-          rebalance: _rebalance,
-          rebalanceFrequency: _rebalanceFrequency,
-        );
-      } else {
-        results = await _apiService.runBacktest(
-          ticker: _tickerController.text.toUpperCase(),
-          startDate: _formatDate(_startDate),
-          endDate: _formatDate(_endDate),
-          rsiPeriod: int.parse(_rsiPeriodController.text),
-          rsiBuy: int.parse(_rsiBuyController.text),
-          rsiSell: int.parse(_rsiSellController.text),
-          initialCash: double.parse(_initialCashController.text),
-        );
+      if (_portfolioStocks.isEmpty) {
+        throw 'Please add at least one stock to the portfolio';
       }
+      
+      final totalAllocation = _portfolioStocks.fold<double>(
+        0, (sum, stock) => sum + stock.allocation
+      );
+      
+      if ((totalAllocation - 100.0).abs() > 0.01) {
+        throw 'Portfolio allocations must sum to 100% (current: ${totalAllocation.toStringAsFixed(1)}%)';
+      }
+      
+      final results = await _apiService.runPortfolioBacktest(
+        stocks: _portfolioStocks.map((s) => PortfolioStock(
+          ticker: s.ticker,
+          allocation: s.allocation,
+        )).toList(),
+        startDate: _formatDate(_startDate),
+        endDate: _formatDate(_endDate),
+        rsiPeriod: int.parse(_rsiPeriodController.text),
+        rsiBuy: int.parse(_rsiBuyController.text),
+        rsiSell: int.parse(_rsiSellController.text),
+        initialCash: double.parse(_initialCashController.text),
+        rebalance: _rebalance,
+        rebalanceFrequency: _rebalanceFrequency,
+      );
 
       setState(() {
         _results = results;
@@ -165,7 +153,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Backtest Strategy'),
+        title: const Text('Portfolio Backtest'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
@@ -175,85 +163,19 @@ class _BacktestScreenState extends State<BacktestScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Mode Toggle
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.tune, size: 20),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Backtest Mode',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const Spacer(),
-                      SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(
-                            value: false,
-                            label: Text('Single Stock'),
-                            icon: Icon(Icons.show_chart, size: 16),
-                          ),
-                          ButtonSegment(
-                            value: true,
-                            label: Text('Portfolio'),
-                            icon: Icon(Icons.pie_chart, size: 16),
-                          ),
-                        ],
-                        selected: {_isPortfolioMode},
-                        onSelectionChanged: (Set<bool> newSelection) {
-                          setState(() {
-                            _isPortfolioMode = newSelection.first;
-                            _results = null;
-                            _error = null;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
+              // Portfolio Stocks Section
+              _buildSectionHeader('Portfolio Stocks', Icons.pie_chart),
+              const SizedBox(height: 8),
+              _buildPortfolioList(),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: _addPortfolioStock,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Stock'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 45),
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              // Stock Input Section
-              if (!_isPortfolioMode) ...[
-                _buildSectionHeader('Stock Symbol', Icons.business),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _tickerController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ticker Symbol',
-                    hintText: 'e.g., AAPL, MSFT, TSLA',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  textCapitalization: TextCapitalization.characters,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a ticker symbol';
-                    }
-                    return null;
-                  },
-                ),
-              ] else ...[
-                _buildSectionHeader('Portfolio Stocks', Icons.pie_chart),
-                const SizedBox(height: 8),
-                _buildPortfolioList(),
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: _addPortfolioStock,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Stock'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 45),
-                  ),
-                ),
-              ],
 
               const SizedBox(height: 20),
 
@@ -342,51 +264,49 @@ class _BacktestScreenState extends State<BacktestScreen> {
               ),
 
               // Portfolio Options
-              if (_isPortfolioMode) ...[
-                const SizedBox(height: 20),
-                _buildSectionHeader('Portfolio Options', Icons.settings_suggest),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      children: [
-                        SwitchListTile(
-                          title: const Text('Enable Rebalancing'),
-                          subtitle: const Text('Periodically adjust portfolio allocations'),
-                          value: _rebalance,
-                          onChanged: (value) {
-                            setState(() {
-                              _rebalance = value;
-                            });
-                          },
-                        ),
-                        if (_rebalance) ...[
-                          const Divider(),
-                          ListTile(
-                            title: const Text('Rebalance Frequency'),
-                            trailing: DropdownButton<String>(
-                              value: _rebalanceFrequency,
-                              items: const [
-                                DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                                DropdownMenuItem(value: 'quarterly', child: Text('Quarterly')),
-                                DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
-                              ],
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _rebalanceFrequency = value;
-                                  });
-                                }
-                              },
-                            ),
+              const SizedBox(height: 20),
+              _buildSectionHeader('Portfolio Options', Icons.settings_suggest),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        title: const Text('Enable Rebalancing'),
+                        subtitle: const Text('Periodically adjust portfolio allocations'),
+                        value: _rebalance,
+                        onChanged: (value) {
+                          setState(() {
+                            _rebalance = value;
+                          });
+                        },
+                      ),
+                      if (_rebalance) ...[
+                        const Divider(),
+                        ListTile(
+                          title: const Text('Rebalance Frequency'),
+                          trailing: DropdownButton<String>(
+                            value: _rebalanceFrequency,
+                            items: const [
+                              DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                              DropdownMenuItem(value: 'quarterly', child: Text('Quarterly')),
+                              DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _rebalanceFrequency = value;
+                                });
+                              }
+                            },
                           ),
-                        ],
+                        ),
                       ],
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
 
               const SizedBox(height: 24),
 
@@ -409,12 +329,12 @@ class _BacktestScreenState extends State<BacktestScreen> {
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.play_arrow),
-                          const SizedBox(width: 8),
+                        children: const [
+                          Icon(Icons.play_arrow),
+                          SizedBox(width: 8),
                           Text(
-                            _isPortfolioMode ? 'Run Portfolio Backtest' : 'Run Backtest',
-                            style: const TextStyle(
+                            'Run Portfolio Backtest',
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -451,7 +371,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
                 BacktestResultsCard(results: _results!),
                 
                 // Portfolio Details
-                if (_isPortfolioMode && _results!.containsKey('stock_performances')) ...[
+                if (_results!.containsKey('stock_performances')) ...[
                   const SizedBox(height: 16),
                   _buildPortfolioPerformanceCard(),
                   
@@ -801,7 +721,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
 
   @override
   void dispose() {
-    _tickerController.dispose();
     _rsiPeriodController.dispose();
     _rsiBuyController.dispose();
     _rsiSellController.dispose();
