@@ -223,7 +223,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => BacktestScreen(
-                    initialTicker: _currentSymbol!,
                   ),
                 ),
               );

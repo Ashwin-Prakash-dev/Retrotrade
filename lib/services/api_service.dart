@@ -191,59 +191,28 @@ class ApiService {
     String sector = 'any',
   }) async {
     try {
+      // Updated request body to match the backend's expected format
       final Map<String, dynamic> requestBody = {
-        'filters': <String, dynamic>{},
+        'use_rsi': useRsi,
+        'rsi_min': rsiMin,
+        'rsi_max': rsiMax,
+        'use_macd': useMacd,
+        'macd_signal': macdSignal,
+        'use_vwap': useVwap,
+        'vwap_position': vwapPosition,
+        'use_pe': usePe,
+        'pe_min': peMin,
+        'pe_max': peMax,
+        'use_market_cap': useMarketCap,
+        'market_cap_min': marketCapMin,
+        'market_cap_max': marketCapMax,
+        'use_volume': useVolume,
+        'volume_min': volumeMin,
+        'use_price': usePrice,
+        'price_min': priceMin,
+        'price_max': priceMax,
+        'sector': sector,
       };
-
-      if (useRsi) {
-        requestBody['filters']['rsi'] = {
-          'min': rsiMin,
-          'max': rsiMax,
-        };
-      }
-
-      if (useMacd) {
-        requestBody['filters']['macd'] = {
-          'signal': macdSignal,
-        };
-      }
-
-      if (useVwap) {
-        requestBody['filters']['vwap'] = {
-          'position': vwapPosition,
-        };
-      }
-
-      if (usePe) {
-        requestBody['filters']['pe_ratio'] = {
-          'min': peMin,
-          'max': peMax,
-        };
-      }
-
-      if (useMarketCap) {
-        requestBody['filters']['market_cap'] = {
-          'min': marketCapMin,
-          'max': marketCapMax,
-        };
-      }
-
-      if (useVolume) {
-        requestBody['filters']['volume'] = {
-          'min': volumeMin,
-        };
-      }
-
-      if (usePrice) {
-        requestBody['filters']['price'] = {
-          'min': priceMin,
-          'max': priceMax,
-        };
-      }
-
-      if (sector != 'any') {
-        requestBody['filters']['sector'] = sector;
-      }
 
       final response = await http.post(
         Uri.parse('$baseUrl/screen-stocks'),
@@ -252,9 +221,10 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        final List<dynamic> stocks = responseData['stocks'] ?? [];
-        return stocks.cast<Map<String, dynamic>>();
+        // Backend returns a List directly, not wrapped in an object
+        final List<dynamic> data = jsonDecode(response.body);
+        // Convert List<dynamic> to List<Map<String, dynamic>>
+        return data.map((item) => item as Map<String, dynamic>).toList();
       } else {
         final errorData = jsonDecode(response.body);
         throw errorData['detail'] ?? 'Stock screening failed';
