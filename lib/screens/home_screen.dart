@@ -171,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     if (_error != null)
                       Card(
-                        color: Colors.red.shade50,
+                        color: const Color.fromARGB(255, 4, 63, 41),
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Row(
@@ -218,22 +218,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           } else if (index == 2) {
-            if (_currentSymbol != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => BacktestScreen(
-                  ),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BacktestScreen(
+                  initialTicker: _currentSymbol,
                 ),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Please search for a stock first'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
+              ),
+            );
           }
         },
         items: const [
@@ -502,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: news.length,
         separatorBuilder: (context, index) => Divider(
           height: 1,
-          color: const Color.fromARGB(255, 139, 170, 118),
+          color: Colors.grey.shade300,
         ),
         itemBuilder: (context, index) {
           final item = news[index];
@@ -577,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Mornin';
+    if (hour < 12) return 'Morning';
     if (hour < 17) return 'Afternoon';
     return 'Evening';
   }
