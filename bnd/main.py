@@ -11,6 +11,7 @@ from typing import Optional, List
 import requests
 import json
 
+
 app = FastAPI(title="Stock Analysis & Backtest API", version="1.0.0")
 
 # Add CORS middleware for Flutter app
@@ -756,6 +757,178 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         print(f"Unexpected error: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+class StockScreenerParams(BaseModel):
+    use_rsi: bool = False
+    rsi_min: float = 30.0
+    rsi_max: float = 70.0
+    use_macd: bool = False
+    macd_signal: str = 'any'  # bullish, bearish, any
+    use_vwap: bool = False
+    vwap_position: str = 'any'  # above, below, any
+    use_pe: bool = False
+    pe_min: float = 5.0
+    pe_max: float = 30.0
+    use_market_cap: bool = False
+    market_cap_min: float = 1000000000.0  # 1B
+    market_cap_max: float = 1000000000000.0  # 1T
+    use_volume: bool = False
+    volume_min: float = 1000000.0  # 1M
+    use_price: bool = False
+    price_min: float = 1.0
+    price_max: float = 1000.0
+    sector: str = 'any'
+
+# Helper function to calculate VWAP
+def calculate_vwap(df):
+    """Calculate Volume Weighted Average Price"""
+    try:
+        if len(df) < 20:
+            return df['Close'].iloc[-1]
+        
+        # Use last 20 days for VWAP calculation
+        recent_df = df.tail(20).copy()
+        typical_price = (recent_df['High'] + recent_df['Low'] + recent_df['Close']) / 3
+        vwap = (typical_price * recent_df['Volume']).sum() / recent_df['Volume'].sum()
+        return float(vwap)
+    except:
+        return df['Close'].iloc[-1] if len(df) > 0 else 0.0
+
+# Add this endpoint to your FastAPI app
+@app.post("/screen-stocks")
+def screen_stocks(params: StockScreenerParams):
+    """
+    Screen stocks based on various technical and fundamental criteria
+    """
+    try:
+        # Get list of stocks to screen (using POPULAR_STOCKS as the universe)
+        stock_symbols = list(POPULAR_STOCKS.keys())
+        results = []
+        
+        # Date range for historical data
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=90)
+        
+        for symbol in stock_symbols:
+            try:
+                # Download stock data
+                ticker = yf.Ticker(symbol)
+                df = yf.download(symbol, start=start_date, end=end_date, progress=False)
+                
+                if df.empty:
+                    continue
+                
+                # Handle MultiIndex columns
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+                
+                # Get stock info
+                info = ticker.info
+                current_price = float(df['Close'].iloc[-1])
+                volume = int(df['Volume'].iloc[-1])
+                market_cap = float(info.get('marketCap', 0))
+                pe_ratio = float(info.get('trailingPE', 0)) if info.get('trailingPE') else 0.0
+                sector = info.get('sector', 'Unknown')
+                company_name = info.get('longName', f"{symbol} Corporation")
+                
+                # Apply filters
+                passes_filters = True
+                
+                # Sector filter
+                if params.sector != 'any':
+                    if sector != params.sector:
+                        passes_filters = False
+                        continue
+                
+                # Price filter
+                if params.use_price:
+                    if current_price < params.price_min or current_price > params.price_max:
+                        passes_filters = False
+                        continue
+                
+                # Volume filter
+                if params.use_volume:
+                    if volume < params.volume_min:
+                        passes_filters = False
+                        continue
+                
+                # Market Cap filter
+                if params.use_market_cap:
+                    if market_cap < params.market_cap_min or market_cap > params.market_cap_max:
+                        passes_filters = False
+                        continue
+                
+                # P/E Ratio filter
+                if params.use_pe:
+                    if pe_ratio <= 0 or pe_ratio < params.pe_min or pe_ratio > params.pe_max:
+                        passes_filters = False
+                        continue
+                
+                # RSI filter
+                rsi_value = 50.0
+                if params.use_rsi:
+                    rsi_value = calculate_rsi(df['Close'].values, window=14)
+                    if rsi_value < params.rsi_min or rsi_value > params.rsi_max:
+                        passes_filters = False
+                        continue
+                
+                # MACD filter
+                macd_value = 0.0
+                if params.use_macd:
+                    macd_value = calculate_macd(df['Close'].values)
+                    if params.macd_signal == 'bullish' and macd_value <= 0:
+                        passes_filters = False
+                        continue
+                    elif params.macd_signal == 'bearish' and macd_value >= 0:
+                        passes_filters = False
+                        continue
+                
+                # VWAP filter
+                vwap_value = 0.0
+                if params.use_vwap:
+                    vwap_value = calculate_vwap(df)
+                    if params.vwap_position == 'above' and current_price <= vwap_value:
+                        passes_filters = False
+                        continue
+                    elif params.vwap_position == 'below' and current_price >= vwap_value:
+                        passes_filters = False
+                        continue
+                
+                # If stock passes all filters, add to results
+                if passes_filters:
+                    previous_close = df['Close'].iloc[-2] if len(df) > 1 else current_price
+                    change = current_price - previous_close
+                    change_percent = (change / previous_close) * 100
+                    
+                    results.append({
+                        'symbol': symbol,
+                        'company_name': company_name,
+                        'sector': sector,
+                        'current_price': round(current_price, 2),
+                        'change': round(change, 2),
+                        'change_percent': round(change_percent, 2),
+                        'volume': volume,
+                        'market_cap': market_cap,
+                        'pe_ratio': round(pe_ratio, 2) if pe_ratio > 0 else 0.0,
+                        'rsi': round(rsi_value, 2),
+                        'macd': round(macd_value, 2),
+                        'vwap': round(vwap_value, 2) if params.use_vwap else 0.0,
+                    })
+                
+            except Exception as e:
+                # Skip stocks that fail to load
+                print(f"Error processing {symbol}: {str(e)}")
+                continue
+        
+        # Sort results by symbol
+        results.sort(key=lambda x: x['symbol'])
+        
+        return results
+        
+    except Exception as e:
+        print(f"Error in stock screener: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Stock screener failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
