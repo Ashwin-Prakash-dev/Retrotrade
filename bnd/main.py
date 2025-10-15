@@ -41,10 +41,23 @@ class PortfolioStrategyInput(BaseModel):
     stocks: List[PortfolioStock] = Field(..., min_items=1, max_items=20)
     start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
     end_date: str = Field(..., description="End date in YYYY-MM-DD format")
-    strategy: str = Field(default="RSI", description="Strategy type")
+    strategy: str = Field(default="RSI", description="Strategy type: RSI, MACD, or Volume_Spike")
+    
+    # RSI parameters
     rsi_period: int = Field(default=14, ge=5, le=50)
     rsi_buy: int = Field(default=30, ge=0, le=100)
     rsi_sell: int = Field(default=70, ge=0, le=100)
+    
+    # MACD parameters
+    macd_fast: int = Field(default=12, ge=5, le=50)
+    macd_slow: int = Field(default=26, ge=10, le=100)
+    macd_signal: int = Field(default=9, ge=5, le=30)
+    
+    # Volume Spike parameters
+    volume_multiplier: float = Field(default=2.0, ge=1.0, le=10.0)
+    volume_period: int = Field(default=20, ge=5, le=100)
+    volume_hold_days: int = Field(default=5, ge=1, le=30)
+    
     initial_cash: float = Field(default=100000.0, ge=1000)
     rebalance: bool = Field(default=False, description="Rebalance portfolio periodically")
     rebalance_frequency: str = Field(default="monthly", description="monthly, quarterly, yearly")
@@ -52,7 +65,7 @@ class PortfolioStrategyInput(BaseModel):
     @validator('stocks')
     def validate_allocations(cls, v):
         total = sum(stock.allocation for stock in v)
-        if abs(total - 100.0) > 0.01:  # Allow small floating point errors
+        if abs(total - 100.0) > 0.01:
             raise ValueError(f'Stock allocations must sum to 100%, got {total}%')
         return v
 
@@ -63,40 +76,6 @@ class PortfolioStrategyInput(BaseModel):
             return v
         except ValueError:
             raise ValueError('Date must be in YYYY-MM-DD format')
-
-    @validator('rsi_sell')
-    def rsi_sell_must_be_greater_than_buy(cls, v, values):
-        if 'rsi_buy' in values and v <= values['rsi_buy']:
-            raise ValueError('RSI sell threshold must be greater than buy threshold')
-        return v
-
-class StrategyInput(BaseModel):
-    ticker: str = Field(..., min_length=1, max_length=10, description="Stock ticker symbol")
-    start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
-    end_date: str = Field(..., description="End date in YYYY-MM-DD format")
-    strategy: str = Field(default="RSI", description="Strategy type")
-    rsi_period: int = Field(default=14, ge=5, le=50, description="RSI calculation period")
-    rsi_buy: int = Field(default=30, ge=0, le=100, description="RSI buy threshold")
-    rsi_sell: int = Field(default=70, ge=0, le=100, description="RSI sell threshold")
-    initial_cash: float = Field(default=100000.0, ge=1000, description="Initial portfolio value")
-
-    @validator('ticker')
-    def ticker_must_be_uppercase(cls, v):
-        return v.upper().strip()
-
-    @validator('start_date', 'end_date')
-    def validate_date_format(cls, v):
-        try:
-            datetime.strptime(v, '%Y-%m-%d')
-            return v
-        except ValueError:
-            raise ValueError('Date must be in YYYY-MM-DD format')
-
-    @validator('rsi_sell')
-    def rsi_sell_must_be_greater_than_buy(cls, v, values):
-        if 'rsi_buy' in values and v <= values['rsi_buy']:
-            raise ValueError('RSI sell threshold must be greater than buy threshold')
-        return v
 
 class BacktestResult(BaseModel):
     final_value: float
@@ -119,8 +98,8 @@ class PortfolioBacktestResult(BaseModel):
     losing_trades: int
     win_rate: float
     max_drawdown: float
-    stock_performances: List[dict]  # Individual stock performance
-    portfolio_composition: List[dict]  # Final portfolio composition
+    stock_performances: List[dict]
+    portfolio_composition: List[dict]
 
 class StockInfo(BaseModel):
     symbol: str
@@ -154,7 +133,7 @@ class StockInfo(BaseModel):
     analyst_sell: int
     target_price: float
 
-# Popular stock symbols for suggestions
+# Popular stock symbols
 POPULAR_STOCKS = {
     'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corporation', 'GOOGL': 'Alphabet Inc. Class A',
     'GOOG': 'Alphabet Inc. Class C', 'AMZN': 'Amazon.com Inc.', 'TSLA': 'Tesla Inc.',
@@ -179,6 +158,8 @@ POPULAR_STOCKS = {
     'TMUS': 'T-Mobile US Inc.', 'AMT': 'American Tower Corporation', 'PLD': 'Prologis Inc.',
     'CCI': 'Crown Castle International Corp.',
 }
+
+# ==================== STRATEGY CLASSES ====================
 
 class RSIStrategy(bt.Strategy):
     params = (
@@ -209,12 +190,88 @@ class RSIStrategy(bt.Strategy):
             else:
                 self.losing_trades += 1
 
+
+class MACDStrategy(bt.Strategy):
+    params = (
+        ("macd_fast", 12),
+        ("macd_slow", 26),
+        ("macd_signal", 9),
+    )
+
+    def __init__(self):
+        self.macd = bt.indicators.MACD(
+            self.data.close,
+            period_me1=self.params.macd_fast,
+            period_me2=self.params.macd_slow,
+            period_signal=self.params.macd_signal
+        )
+        self.trade_count = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
+
+    def next(self):
+        if not self.position:
+            # Buy when MACD line crosses above signal line
+            if self.macd.macd[0] > self.macd.signal[0] and self.macd.macd[-1] <= self.macd.signal[-1]:
+                self.buy(size=None)
+        else:
+            # Sell when MACD line crosses below signal line
+            if self.macd.macd[0] < self.macd.signal[0] and self.macd.macd[-1] >= self.macd.signal[-1]:
+                self.sell(size=self.position.size)
+
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            self.trade_count += 1
+            if trade.pnl > 0:
+                self.winning_trades += 1
+            else:
+                self.losing_trades += 1
+
+
+class VolumeSpikeStrategy(bt.Strategy):
+    params = (
+        ("volume_multiplier", 2.0),
+        ("volume_period", 20),
+        ("hold_days", 5),
+    )
+
+    def __init__(self):
+        self.volume_sma = bt.indicators.SMA(self.data.volume, period=self.params.volume_period)
+        self.trade_count = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.hold_counter = 0
+
+    def next(self):
+        if not self.position:
+            # Buy when volume exceeds threshold
+            if self.data.volume[0] > (self.volume_sma[0] * self.params.volume_multiplier):
+                self.buy(size=None)
+                self.hold_counter = 0
+        else:
+            self.hold_counter += 1
+            # Sell after holding for specified days
+            if self.hold_counter >= self.params.hold_days:
+                self.sell(size=self.position.size)
+                self.hold_counter = 0
+
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            self.trade_count += 1
+            if trade.pnl > 0:
+                self.winning_trades += 1
+            else:
+                self.losing_trades += 1
+
+
+# ==================== PORTFOLIO STRATEGIES ====================
+
 class PortfolioRSIStrategy(bt.Strategy):
     params = (
         ("rsi_period", 14),
         ("rsi_buy", 30),
         ("rsi_sell", 70),
-        ("allocations", {}),  # Dict of {data_name: allocation_pct}
+        ("allocations", {}),
     )
 
     def __init__(self):
@@ -223,7 +280,6 @@ class PortfolioRSIStrategy(bt.Strategy):
         self.winning_trades = {}
         self.losing_trades = {}
         
-        # Create RSI indicator for each data feed
         for i, d in enumerate(self.datas):
             self.rsi_indicators[d._name] = bt.indicators.RSI_SMA(
                 d.close, period=self.params.rsi_period
@@ -239,16 +295,13 @@ class PortfolioRSIStrategy(bt.Strategy):
             allocation = self.params.allocations.get(d._name, 0) / 100.0
             
             if not pos:
-                # Buy signal
                 if rsi < self.params.rsi_buy:
-                    # Calculate size based on allocation
                     available_cash = self.broker.getcash()
                     target_value = available_cash * allocation
                     size = int(target_value / d.close[0])
                     if size > 0:
                         self.buy(data=d, size=size)
             else:
-                # Sell signal
                 if rsi > self.params.rsi_sell:
                     self.sell(data=d, size=pos.size)
 
@@ -260,6 +313,121 @@ class PortfolioRSIStrategy(bt.Strategy):
                 self.winning_trades[data_name] += 1
             else:
                 self.losing_trades[data_name] += 1
+
+
+class PortfolioMACDStrategy(bt.Strategy):
+    params = (
+        ("macd_fast", 12),
+        ("macd_slow", 26),
+        ("macd_signal", 9),
+        ("allocations", {}),
+    )
+
+    def __init__(self):
+        self.macd_indicators = {}
+        self.trade_counts = {}
+        self.winning_trades = {}
+        self.losing_trades = {}
+        
+        for i, d in enumerate(self.datas):
+            self.macd_indicators[d._name] = bt.indicators.MACD(
+                d.close,
+                period_me1=self.params.macd_fast,
+                period_me2=self.params.macd_slow,
+                period_signal=self.params.macd_signal
+            )
+            self.trade_counts[d._name] = 0
+            self.winning_trades[d._name] = 0
+            self.losing_trades[d._name] = 0
+
+    def next(self):
+        for i, d in enumerate(self.datas):
+            pos = self.getposition(d)
+            macd = self.macd_indicators[d._name]
+            allocation = self.params.allocations.get(d._name, 0) / 100.0
+            
+            if not pos:
+                # Buy when MACD crosses above signal
+                if len(d) > 1:
+                    if macd.macd[0] > macd.signal[0] and macd.macd[-1] <= macd.signal[-1]:
+                        available_cash = self.broker.getcash()
+                        target_value = available_cash * allocation
+                        size = int(target_value / d.close[0])
+                        if size > 0:
+                            self.buy(data=d, size=size)
+            else:
+                # Sell when MACD crosses below signal
+                if len(d) > 1:
+                    if macd.macd[0] < macd.signal[0] and macd.macd[-1] >= macd.signal[-1]:
+                        self.sell(data=d, size=pos.size)
+
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            data_name = trade.data._name
+            self.trade_counts[data_name] += 1
+            if trade.pnl > 0:
+                self.winning_trades[data_name] += 1
+            else:
+                self.losing_trades[data_name] += 1
+
+
+class PortfolioVolumeSpikeStrategy(bt.Strategy):
+    params = (
+        ("volume_multiplier", 2.0),
+        ("volume_period", 20),
+        ("hold_days", 5),
+        ("allocations", {}),
+    )
+
+    def __init__(self):
+        self.volume_smas = {}
+        self.trade_counts = {}
+        self.winning_trades = {}
+        self.losing_trades = {}
+        self.hold_counters = {}
+        
+        for i, d in enumerate(self.datas):
+            self.volume_smas[d._name] = bt.indicators.SMA(
+                d.volume, period=self.params.volume_period
+            )
+            self.trade_counts[d._name] = 0
+            self.winning_trades[d._name] = 0
+            self.losing_trades[d._name] = 0
+            self.hold_counters[d._name] = 0
+
+    def next(self):
+        for i, d in enumerate(self.datas):
+            pos = self.getposition(d)
+            volume_sma = self.volume_smas[d._name]
+            allocation = self.params.allocations.get(d._name, 0) / 100.0
+            
+            if not pos:
+                # Buy on volume spike
+                if d.volume[0] > (volume_sma[0] * self.params.volume_multiplier):
+                    available_cash = self.broker.getcash()
+                    target_value = available_cash * allocation
+                    size = int(target_value / d.close[0])
+                    if size > 0:
+                        self.buy(data=d, size=size)
+                        self.hold_counters[d._name] = 0
+            else:
+                self.hold_counters[d._name] += 1
+                # Sell after holding period
+                if self.hold_counters[d._name] >= self.params.hold_days:
+                    self.sell(data=d, size=pos.size)
+                    self.hold_counters[d._name] = 0
+
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            data_name = trade.data._name
+            self.trade_counts[data_name] += 1
+            if trade.pnl > 0:
+                self.winning_trades[data_name] += 1
+            else:
+                self.losing_trades[data_name] += 1
+
+
+# ==================== HELPER FUNCTIONS ====================
 
 def calculate_rsi(prices, window=14):
     try:
@@ -333,7 +501,7 @@ def calculate_fibonacci_levels(df, periods=50):
             'fib_618': current_price * 0.90,
         }
 
-def calculate_technical_indicators(df):
+def calculate_technical_indicators(df): 
     try:
         close_prices = df['Close'].values
         high_prices = df['High'].values
@@ -451,6 +619,22 @@ def search_stock_suggestions(query: str, limit: int = 10) -> List[StockSuggestio
     
     return suggestions[:limit]
 
+def calculate_vwap(df):
+    """Calculate Volume Weighted Average Price"""
+    try:
+        if len(df) < 20:
+            return df['Close'].iloc[-1]
+        
+        recent_df = df.tail(20).copy()
+        typical_price = (recent_df['High'] + recent_df['Low'] + recent_df['Close']) / 3
+        vwap = (typical_price * recent_df['Volume']).sum() / recent_df['Volume'].sum()
+        return float(vwap)
+    except:
+        return df['Close'].iloc[-1] if len(df) > 0 else 0.0
+
+
+# ==================== API ENDPOINTS ====================
+
 @app.get("/")
 def read_root():
     return {"message": "Stock Analysis & Backtest API is running"}
@@ -535,95 +719,6 @@ def get_stock_info(symbol: str):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock information: {str(e)}")
 
-@app.post("/backtest", response_model=BacktestResult)
-def run_backtest(data: StrategyInput):
-    try:
-        start_dt = datetime.strptime(data.start_date, '%Y-%m-%d')
-        end_dt = datetime.strptime(data.end_date, '%Y-%m-%d')
-        
-        if start_dt >= end_dt:
-            raise HTTPException(status_code=400, detail="Start date must be before end date")
-        if end_dt > datetime.now():
-            raise HTTPException(status_code=400, detail="End date cannot be in the future")
-
-        cerebro = bt.Cerebro()
-        cerebro.addstrategy(
-            RSIStrategy,
-            rsi_period=data.rsi_period,
-            rsi_buy=data.rsi_buy,
-            rsi_sell=data.rsi_sell
-        )
-
-        try:
-            df = yf.download(data.ticker, start=data.start_date, end=data.end_date, progress=False)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to download data for {data.ticker}: {str(e)}")
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-
-        if df is None or df.empty:
-            raise HTTPException(status_code=404, detail=f"No data found for {data.ticker}")
-
-        df.reset_index(inplace=True)
-
-        required_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise HTTPException(status_code=400, detail=f"Missing required columns: {missing_columns}")
-
-        data_feed = bt.feeds.PandasData(
-            dataname=df,
-            datetime='Date',
-            open='Open',
-            high='High',
-            low='Low',
-            close='Close',
-            volume='Volume',
-            openinterest=None
-        )
-
-        cerebro.adddata(data_feed)
-        cerebro.broker.set_cash(data.initial_cash)
-        initial_value = cerebro.broker.getvalue()
-
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
-        cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
-
-        results = cerebro.run()
-        final_value = cerebro.broker.getvalue()
-
-        strategy = results[0]
-        trade_analyzer = strategy.analyzers.trades.get_analysis()
-        drawdown_analyzer = strategy.analyzers.drawdown.get_analysis()
-
-        total_return = final_value - initial_value
-        total_return_pct = (total_return / initial_value) * 100
-        
-        total_trades = trade_analyzer.get('total', {}).get('total', 0)
-        won_trades = trade_analyzer.get('won', {}).get('total', 0)
-        lost_trades = trade_analyzer.get('lost', {}).get('total', 0)
-        win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
-        max_drawdown = drawdown_analyzer.get('max', {}).get('drawdown', 0)
-
-        return BacktestResult(
-            final_value=round(final_value, 2),
-            initial_value=round(initial_value, 2),
-            total_return=round(total_return, 2),
-            total_return_pct=round(total_return_pct, 2),
-            total_trades=total_trades,
-            winning_trades=won_trades,
-            losing_trades=lost_trades,
-            win_rate=round(win_rate, 2),
-            max_drawdown=round(max_drawdown, 2)
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/backtest-portfolio", response_model=PortfolioBacktestResult)
 def run_portfolio_backtest(data: PortfolioStrategyInput):
@@ -641,13 +736,33 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         # Prepare allocations dict
         allocations = {stock.ticker: stock.allocation for stock in data.stocks}
         
-        cerebro.addstrategy(
-            PortfolioRSIStrategy,
-            rsi_period=data.rsi_period,
-            rsi_buy=data.rsi_buy,
-            rsi_sell=data.rsi_sell,
-            allocations=allocations
-        )
+        # Select strategy based on input
+        if data.strategy == "RSI":
+            cerebro.addstrategy(
+                PortfolioRSIStrategy,
+                rsi_period=data.rsi_period,
+                rsi_buy=data.rsi_buy,
+                rsi_sell=data.rsi_sell,
+                allocations=allocations
+            )
+        elif data.strategy == "MACD":
+            cerebro.addstrategy(
+                PortfolioMACDStrategy,
+                macd_fast=data.macd_fast,
+                macd_slow=data.macd_slow,
+                macd_signal=data.macd_signal,
+                allocations=allocations
+            )
+        elif data.strategy == "Volume_Spike":
+            cerebro.addstrategy(
+                PortfolioVolumeSpikeStrategy,
+                volume_multiplier=data.volume_multiplier,
+                volume_period=data.volume_period,
+                hold_days=data.volume_hold_days,
+                allocations=allocations
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown strategy: {data.strategy}")
 
         # Download data for all stocks
         stock_data = {}
@@ -758,71 +873,50 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
 class StockScreenerParams(BaseModel):
     use_rsi: bool = False
     rsi_min: float = 30.0
     rsi_max: float = 70.0
     use_macd: bool = False
-    macd_signal: str = 'any'  # bullish, bearish, any
+    macd_signal: str = 'any'
     use_vwap: bool = False
-    vwap_position: str = 'any'  # above, below, any
+    vwap_position: str = 'any'
     use_pe: bool = False
     pe_min: float = 5.0
     pe_max: float = 30.0
     use_market_cap: bool = False
-    market_cap_min: float = 1000000000.0  # 1B
-    market_cap_max: float = 1000000000000.0  # 1T
+    market_cap_min: float = 1000000000.0
+    market_cap_max: float = 1000000000000.0
     use_volume: bool = False
-    volume_min: float = 1000000.0  # 1M
+    volume_min: float = 1000000.0
     use_price: bool = False
     price_min: float = 1.0
     price_max: float = 1000.0
     sector: str = 'any'
 
-# Helper function to calculate VWAP
-def calculate_vwap(df):
-    """Calculate Volume Weighted Average Price"""
-    try:
-        if len(df) < 20:
-            return df['Close'].iloc[-1]
-        
-        # Use last 20 days for VWAP calculation
-        recent_df = df.tail(20).copy()
-        typical_price = (recent_df['High'] + recent_df['Low'] + recent_df['Close']) / 3
-        vwap = (typical_price * recent_df['Volume']).sum() / recent_df['Volume'].sum()
-        return float(vwap)
-    except:
-        return df['Close'].iloc[-1] if len(df) > 0 else 0.0
 
-# Add this endpoint to your FastAPI app
 @app.post("/screen-stocks")
 def screen_stocks(params: StockScreenerParams):
-    """
-    Screen stocks based on various technical and fundamental criteria
-    """
+    """Screen stocks based on various technical and fundamental criteria"""
     try:
-        # Get list of stocks to screen (using POPULAR_STOCKS as the universe)
         stock_symbols = list(POPULAR_STOCKS.keys())
         results = []
         
-        # Date range for historical data
         end_date = datetime.now()
         start_date = end_date - timedelta(days=90)
         
         for symbol in stock_symbols:
             try:
-                # Download stock data
                 ticker = yf.Ticker(symbol)
                 df = yf.download(symbol, start=start_date, end=end_date, progress=False)
                 
                 if df.empty:
                     continue
                 
-                # Handle MultiIndex columns
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
                 
-                # Get stock info
                 info = ticker.info
                 current_price = float(df['Close'].iloc[-1])
                 volume = int(df['Volume'].iloc[-1])
@@ -831,40 +925,33 @@ def screen_stocks(params: StockScreenerParams):
                 sector = info.get('sector', 'Unknown')
                 company_name = info.get('longName', f"{symbol} Corporation")
                 
-                # Apply filters
                 passes_filters = True
                 
-                # Sector filter
                 if params.sector != 'any':
                     if sector != params.sector:
                         passes_filters = False
                         continue
                 
-                # Price filter
                 if params.use_price:
                     if current_price < params.price_min or current_price > params.price_max:
                         passes_filters = False
                         continue
                 
-                # Volume filter
                 if params.use_volume:
                     if volume < params.volume_min:
                         passes_filters = False
                         continue
                 
-                # Market Cap filter
                 if params.use_market_cap:
                     if market_cap < params.market_cap_min or market_cap > params.market_cap_max:
                         passes_filters = False
                         continue
                 
-                # P/E Ratio filter
                 if params.use_pe:
                     if pe_ratio <= 0 or pe_ratio < params.pe_min or pe_ratio > params.pe_max:
                         passes_filters = False
                         continue
                 
-                # RSI filter
                 rsi_value = 50.0
                 if params.use_rsi:
                     rsi_value = calculate_rsi(df['Close'].values, window=14)
@@ -872,7 +959,6 @@ def screen_stocks(params: StockScreenerParams):
                         passes_filters = False
                         continue
                 
-                # MACD filter
                 macd_value = 0.0
                 if params.use_macd:
                     macd_value = calculate_macd(df['Close'].values)
@@ -883,7 +969,6 @@ def screen_stocks(params: StockScreenerParams):
                         passes_filters = False
                         continue
                 
-                # VWAP filter
                 vwap_value = 0.0
                 if params.use_vwap:
                     vwap_value = calculate_vwap(df)
@@ -894,7 +979,6 @@ def screen_stocks(params: StockScreenerParams):
                         passes_filters = False
                         continue
                 
-                # If stock passes all filters, add to results
                 if passes_filters:
                     previous_close = df['Close'].iloc[-2] if len(df) > 1 else current_price
                     change = current_price - previous_close
@@ -916,19 +1000,17 @@ def screen_stocks(params: StockScreenerParams):
                     })
                 
             except Exception as e:
-                # Skip stocks that fail to load
                 print(f"Error processing {symbol}: {str(e)}")
                 continue
         
-        # Sort results by symbol
         results.sort(key=lambda x: x['symbol'])
-        
         return results
         
     except Exception as e:
         print(f"Error in stock screener: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Stock screener failed: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

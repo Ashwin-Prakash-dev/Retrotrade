@@ -15,10 +15,24 @@ class _BacktestScreenState extends State<BacktestScreen> {
   final _apiService = ApiService();
   final _formKey = GlobalKey<FormState>();
   
-  // Controllers
+  // Strategy selection
+  String _selectedStrategy = 'RSI';
+  
+  // RSI Controllers
   final _rsiPeriodController = TextEditingController(text: '14');
   final _rsiBuyController = TextEditingController(text: '30');
   final _rsiSellController = TextEditingController(text: '70');
+  
+  // MACD Controllers
+  final _macdFastController = TextEditingController(text: '12');
+  final _macdSlowController = TextEditingController(text: '26');
+  final _macdSignalController = TextEditingController(text: '9');
+  
+  // Volume Spike Controllers
+  final _volumeMultiplierController = TextEditingController(text: '2.0');
+  final _volumePeriodController = TextEditingController(text: '20');
+  final _volumeHoldDaysController = TextEditingController(text: '5');
+  
   final _initialCashController = TextEditingController(text: '100000');
   
   // State
@@ -38,7 +52,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
   @override
   void initState() {
     super.initState();
-    // If initial ticker is provided, add it to portfolio with 100% allocation
     if (widget.initialTicker != null) {
       _portfolioStocks.add(PortfolioStockInput(
         ticker: widget.initialTicker!,
@@ -98,6 +111,29 @@ class _BacktestScreenState extends State<BacktestScreen> {
         throw 'Portfolio allocations must sum to 100% (current: ${totalAllocation.toStringAsFixed(1)}%)';
       }
       
+      // Build strategy parameters based on selected strategy
+      final Map<String, dynamic> strategyParams = {
+        'strategy': _selectedStrategy,
+      };
+      
+      switch (_selectedStrategy) {
+        case 'RSI':
+          strategyParams['rsi_period'] = int.parse(_rsiPeriodController.text);
+          strategyParams['rsi_buy'] = int.parse(_rsiBuyController.text);
+          strategyParams['rsi_sell'] = int.parse(_rsiSellController.text);
+          break;
+        case 'MACD':
+          strategyParams['macd_fast'] = int.parse(_macdFastController.text);
+          strategyParams['macd_slow'] = int.parse(_macdSlowController.text);
+          strategyParams['macd_signal'] = int.parse(_macdSignalController.text);
+          break;
+        case 'Volume_Spike':
+          strategyParams['volume_multiplier'] = double.parse(_volumeMultiplierController.text);
+          strategyParams['volume_period'] = int.parse(_volumePeriodController.text);
+          strategyParams['volume_hold_days'] = int.parse(_volumeHoldDaysController.text);
+          break;
+      }
+      
       final results = await _apiService.runPortfolioBacktest(
         stocks: _portfolioStocks.map((s) => PortfolioStock(
           ticker: s.ticker,
@@ -105,12 +141,10 @@ class _BacktestScreenState extends State<BacktestScreen> {
         )).toList(),
         startDate: _formatDate(_startDate),
         endDate: _formatDate(_endDate),
-        rsiPeriod: int.parse(_rsiPeriodController.text),
-        rsiBuy: int.parse(_rsiBuyController.text),
-        rsiSell: int.parse(_rsiSellController.text),
         initialCash: double.parse(_initialCashController.text),
         rebalance: _rebalance,
         rebalanceFrequency: _rebalanceFrequency,
+        strategyParams: strategyParams,
       );
 
       setState(() {
@@ -204,61 +238,68 @@ class _BacktestScreenState extends State<BacktestScreen> {
 
               const SizedBox(height: 20),
 
-              // Strategy Parameters Section
-              _buildSectionHeader('RSI Strategy Parameters', Icons.settings),
+              // Strategy Selection
+              _buildSectionHeader('Trading Strategy', Icons.psychology),
               const SizedBox(height: 8),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildNumberField(
-                              controller: _rsiPeriodController,
-                              label: 'RSI Period',
-                              hint: '14',
-                              min: 5,
-                              max: 50,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildNumberField(
-                              controller: _initialCashController,
-                              label: 'Initial Cash (\$)',
-                              hint: '100000',
-                              min: 1000,
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        'Select Strategy:',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildNumberField(
-                              controller: _rsiBuyController,
-                              label: 'RSI Buy Threshold',
-                              hint: '30',
-                              min: 0,
-                              max: 100,
-                            ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'RSI',
+                            label: Text('RSI'),
+                            icon: Icon(Icons.show_chart),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildNumberField(
-                              controller: _rsiSellController,
-                              label: 'RSI Sell Threshold',
-                              hint: '70',
-                              min: 0,
-                              max: 100,
-                            ),
+                          ButtonSegment(
+                            value: 'MACD',
+                            label: Text('MACD'),
+                            icon: Icon(Icons.trending_up),
+                          ),
+                          ButtonSegment(
+                            value: 'Volume_Spike',
+                            label: Text('Volume'),
+                            icon: Icon(Icons.bar_chart),
                           ),
                         ],
+                        selected: {_selectedStrategy},
+                        onSelectionChanged: (Set<String> selection) {
+                          setState(() {
+                            _selectedStrategy = selection.first;
+                          });
+                        },
                       ),
                     ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Strategy Parameters Section
+              _buildStrategyParameters(),
+
+              const SizedBox(height: 20),
+
+              // Initial Cash
+              _buildSectionHeader('Initial Investment', Icons.account_balance_wallet),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: _buildNumberField(
+                    controller: _initialCashController,
+                    label: 'Initial Cash (\$)',
+                    hint: '100000',
+                    min: 1000,
                   ),
                 ),
               ),
@@ -370,7 +411,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
               if (_results != null) ...[
                 BacktestResultsCard(results: _results!),
                 
-                // Portfolio Details
                 if (_results!.containsKey('stock_performances')) ...[
                   const SizedBox(height: 16),
                   _buildPortfolioPerformanceCard(),
@@ -384,6 +424,213 @@ class _BacktestScreenState extends State<BacktestScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildStrategyParameters() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.settings, size: 20, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  '${_selectedStrategy.replaceAll('_', ' ')} Parameters',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildStrategySpecificFields(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStrategySpecificFields() {
+    switch (_selectedStrategy) {
+      case 'RSI':
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _rsiPeriodController,
+                    label: 'RSI Period',
+                    hint: '14',
+                    min: 5,
+                    max: 50,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _rsiBuyController,
+                    label: 'Buy Threshold',
+                    hint: '30',
+                    min: 0,
+                    max: 100,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildNumberField(
+              controller: _rsiSellController,
+              label: 'Sell Threshold',
+              hint: '70',
+              min: 0,
+              max: 100,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Buy when RSI < Buy Threshold (oversold), Sell when RSI > Sell Threshold (overbought)',
+                      style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      
+      case 'MACD':
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _macdFastController,
+                    label: 'Fast Period',
+                    hint: '12',
+                    min: 5,
+                    max: 50,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _macdSlowController,
+                    label: 'Slow Period',
+                    hint: '26',
+                    min: 10,
+                    max: 100,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildNumberField(
+              controller: _macdSignalController,
+              label: 'Signal Period',
+              hint: '9',
+              min: 5,
+              max: 30,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.green.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Buy when MACD crosses above Signal line (bullish), Sell when MACD crosses below Signal line (bearish)',
+                      style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      
+      case 'Volume_Spike':
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _volumeMultiplierController,
+                    label: 'Volume Multiplier',
+                    hint: '2.0',
+                    min: 1.0,
+                    max: 10.0,
+                    isDecimal: true,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildNumberField(
+                    controller: _volumePeriodController,
+                    label: 'Average Period',
+                    hint: '20',
+                    min: 5,
+                    max: 100,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildNumberField(
+              controller: _volumeHoldDaysController,
+              label: 'Hold Days',
+              hint: '5',
+              min: 1,
+              max: 30,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Buy when volume exceeds ${_volumeMultiplierController.text}x average, Hold for ${_volumeHoldDaysController.text} days',
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
@@ -447,6 +694,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
     required String hint,
     double? min,
     double? max,
+    bool isDecimal = false,
   }) {
     return TextFormField(
       controller: controller,
@@ -456,7 +704,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
         border: const OutlineInputBorder(),
         isDense: true,
       ),
-      keyboardType: TextInputType.number,
+      keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
       validator: (value) {
         if (value == null || value.isEmpty) {
           return 'Required';
@@ -507,7 +755,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
     return Card(
       child: Column(
         children: [
-          // Allocation progress
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Column(
@@ -546,7 +793,6 @@ class _BacktestScreenState extends State<BacktestScreen> {
             ),
           ),
           const Divider(height: 1),
-          // Stock list
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -724,6 +970,12 @@ class _BacktestScreenState extends State<BacktestScreen> {
     _rsiPeriodController.dispose();
     _rsiBuyController.dispose();
     _rsiSellController.dispose();
+    _macdFastController.dispose();
+    _macdSlowController.dispose();
+    _macdSignalController.dispose();
+    _volumeMultiplierController.dispose();
+    _volumePeriodController.dispose();
+    _volumeHoldDaysController.dispose();
     _initialCashController.dispose();
     super.dispose();
   }

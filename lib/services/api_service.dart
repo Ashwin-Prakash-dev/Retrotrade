@@ -132,29 +132,29 @@ class ApiService {
     required List<PortfolioStock> stocks,
     required String startDate,
     required String endDate,
-    required int rsiPeriod,
-    required int rsiBuy,
-    required int rsiSell,
     required double initialCash,
     bool rebalance = false,
     String rebalanceFrequency = 'monthly',
+    required Map<String, dynamic> strategyParams,
   }) async {
     try {
+      // Build the request body with strategy parameters
+      final Map<String, dynamic> requestBody = {
+        'stocks': stocks.map((s) => s.toJson()).toList(),
+        'start_date': startDate,
+        'end_date': endDate,
+        'initial_cash': initialCash,
+        'rebalance': rebalance,
+        'rebalance_frequency': rebalanceFrequency,
+      };
+
+      // Add all strategy parameters to the request
+      requestBody.addAll(strategyParams);
+
       final response = await http.post(
         Uri.parse('$baseUrl/backtest-portfolio'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'stocks': stocks.map((s) => s.toJson()).toList(),
-          'start_date': startDate,
-          'end_date': endDate,
-          'strategy': 'RSI',
-          'rsi_period': rsiPeriod,
-          'rsi_buy': rsiBuy,
-          'rsi_sell': rsiSell,
-          'initial_cash': initialCash,
-          'rebalance': rebalance,
-          'rebalance_frequency': rebalanceFrequency,
-        }),
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {
@@ -191,7 +191,6 @@ class ApiService {
     String sector = 'any',
   }) async {
     try {
-      // Updated request body to match the backend's expected format
       final Map<String, dynamic> requestBody = {
         'use_rsi': useRsi,
         'rsi_min': rsiMin,
@@ -221,9 +220,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // Backend returns a List directly, not wrapped in an object
         final List<dynamic> data = jsonDecode(response.body);
-        // Convert List<dynamic> to List<Map<String, dynamic>>
         return data.map((item) => item as Map<String, dynamic>).toList();
       } else {
         final errorData = jsonDecode(response.body);
