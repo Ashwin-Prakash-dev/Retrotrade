@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/api_service.dart';
 import '../widgets/backtest_results_card.dart';
 
@@ -1466,6 +1467,7 @@ class PortfolioStockInput {
   });
 }
 
+// Updated dialog with autocomplete
 class _AddStockDialog extends StatefulWidget {
   final Function(String ticker, double allocation) onAdd;
 
@@ -1484,137 +1486,149 @@ class _AddStockDialogState extends State<_AddStockDialog> {
   final _formKey = GlobalKey<FormState>();
   final _tickerController = TextEditingController();
   final _allocationController = TextEditingController();
+  String _selectedSymbol = '';
+
+  void _onStockSelected(String symbol, String companyName) {
+    setState(() {
+      _selectedSymbol = symbol;
+      _tickerController.text = symbol;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
       backgroundColor: cardBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: accentCyan.withOpacity(0.3)),
       ),
-      title: const Text(
-        'ADD STOCK TO PORTFOLIO',
-        style: TextStyle(
-          color: textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ADD STOCK TO PORTFOLIO',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Custom autocomplete field without search button
+              _StockAutocompleteField(
+                controller: _tickerController,
+                onStockSelected: _onStockSelected,
+              ),
+              
+              const SizedBox(height: 16),
+              
+              TextFormField(
+                controller: _allocationController,
+                style: const TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Allocation (%)',
+                  labelStyle: TextStyle(color: textSecondary),
+                  hintText: 'e.g., 25',
+                  hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: accentCyan, width: 2),
+                  ),
+                  suffixText: '%',
+                  suffixStyle: TextStyle(color: textSecondary),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter allocation';
+                  }
+                  final num = double.tryParse(value);
+                  if (num == null || num <= 0 || num > 100) {
+                    return 'Enter 0-100';
+                  }
+                  return null;
+                },
+              ),
+              
+              const SizedBox(height: 24),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'CANCEL',
+                      style: TextStyle(color: textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [accentCyan, Color(0xFF8B5CF6)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextButton(
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          final symbol = _selectedSymbol.isNotEmpty 
+                              ? _selectedSymbol 
+                              : _tickerController.text.split(' ').first.toUpperCase().trim();
+                          
+                          if (symbol.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a valid ticker symbol'),
+                                backgroundColor: Color(0xFFFF0055),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          widget.onAdd(
+                            symbol,
+                            double.parse(_allocationController.text),
+                          );
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text(
+                        'ADD',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _tickerController,
-              style: const TextStyle(color: textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Ticker Symbol',
-                labelStyle: TextStyle(color: textSecondary),
-                hintText: 'e.g., AAPL',
-                hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: accentCyan, width: 2),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-              ),
-              textCapitalization: TextCapitalization.characters,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a ticker';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _allocationController,
-              style: const TextStyle(color: textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Allocation (%)',
-                labelStyle: TextStyle(color: textSecondary),
-                hintText: 'e.g., 25',
-                hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: accentCyan, width: 2),
-                ),
-                suffixText: '%',
-                suffixStyle: TextStyle(color: textSecondary),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-              ),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter allocation';
-                }
-                final num = double.tryParse(value);
-                if (num == null || num <= 0 || num > 100) {
-                  return 'Enter 0-100';
-                }
-                return null;
-              },
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'CANCEL',
-            style: TextStyle(color: textSecondary),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [accentCyan, Color(0xFF8B5CF6)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TextButton(
-            onPressed: () {
-              if (_formKey.currentState!.validate()) {
-                widget.onAdd(
-                  _tickerController.text.toUpperCase().trim(),
-                  double.parse(_allocationController.text),
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text(
-              'ADD',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -1623,5 +1637,273 @@ class _AddStockDialogState extends State<_AddStockDialog> {
     _tickerController.dispose();
     _allocationController.dispose();
     super.dispose();
+  }
+}
+
+// Custom autocomplete field without search button
+class _StockAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final Function(String symbol, String companyName) onStockSelected;
+
+  const _StockAutocompleteField({
+    required this.controller,
+    required this.onStockSelected,
+  });
+
+  @override
+  State<_StockAutocompleteField> createState() => _StockAutocompleteFieldState();
+}
+
+class _StockAutocompleteFieldState extends State<_StockAutocompleteField> {
+  static const Color cardBg = Color(0xFF1A2138);
+  static const Color accentCyan = Color(0xFF00F5FF);
+  static const Color accentPurple = Color(0xFF8B5CF6);
+  static const Color textPrimary = Color(0xFFE2E8F0);
+  static const Color textSecondary = Color(0xFF94A3B8);
+  
+  final _focusNode = FocusNode();
+  final _apiService = ApiService();
+  
+  List<StockSuggestion> _suggestions = [];
+  bool _isLoadingSuggestions = false;
+  bool _showSuggestions = false;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final text = widget.controller.text.trim();
+    
+    if (text.isEmpty) {
+      setState(() {
+        _suggestions.clear();
+        _showSuggestions = false;
+      });
+      return;
+    }
+
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _fetchSuggestions(text);
+    });
+  }
+
+  void _onFocusChanged() {
+    if (!_focusNode.hasFocus) {
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) {
+          setState(() {
+            _showSuggestions = false;
+          });
+        }
+      });
+    }
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    if (query.length < 1) return;
+
+    setState(() {
+      _isLoadingSuggestions = true;
+    });
+
+    try {
+      final results = await _apiService.getStockSuggestions(query);
+      
+      if (mounted) {
+        setState(() {
+          _suggestions = results;
+          _showSuggestions = results.isNotEmpty;
+          _isLoadingSuggestions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _suggestions.clear();
+          _showSuggestions = false;
+          _isLoadingSuggestions = false;
+        });
+      }
+    }
+  }
+
+  void _selectSuggestion(StockSuggestion suggestion) {
+    setState(() {
+      _showSuggestions = false;
+    });
+    _focusNode.unfocus();
+    widget.onStockSelected(suggestion.symbol, suggestion.companyName);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          style: const TextStyle(color: textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Ticker Symbol',
+            labelStyle: TextStyle(color: textSecondary),
+            hintText: 'Search by symbol or company name',
+            hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: accentCyan, width: 2),
+            ),
+            prefixIcon: const Icon(Icons.search, color: textSecondary),
+            suffixIcon: _isLoadingSuggestions
+                ? const Padding(
+                    padding: EdgeInsets.all(14.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accentCyan,
+                      ),
+                    ),
+                  )
+                : widget.controller.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: textSecondary),
+                        onPressed: () {
+                          widget.controller.clear();
+                          setState(() {
+                            _suggestions.clear();
+                            _showSuggestions = false;
+                          });
+                        },
+                      )
+                    : null,
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.05),
+          ),
+          textCapitalization: TextCapitalization.characters,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Please enter a ticker';
+            }
+            return null;
+          },
+        ),
+        
+        // Suggestions List
+        if (_showSuggestions && _suggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            constraints: const BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: accentCyan.withOpacity(0.3),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _suggestions[index];
+                return InkWell(
+                  onTap: () => _selectSuggestion(suggestion),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      border: index < _suggestions.length - 1
+                          ? Border(
+                              bottom: BorderSide(
+                                color: textSecondary.withOpacity(0.1),
+                                width: 1,
+                              ),
+                            )
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                accentCyan.withOpacity(0.2),
+                                accentPurple.withOpacity(0.2),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            suggestion.symbol,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: accentCyan,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            suggestion.companyName,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: textSecondary.withOpacity(0.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
   }
 }
