@@ -10,9 +10,15 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import requests
 import json
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 
 app = FastAPI(title="Stock Analysis & Backtest API", version="1.0.0")
+
+# Thread pool for parallel processing
+executor = ThreadPoolExecutor(max_workers=10)
 
 # Add CORS middleware for Flutter app
 app.add_middleware(
@@ -132,6 +138,27 @@ class StockInfo(BaseModel):
     analyst_hold: int
     analyst_sell: int
     target_price: float
+
+class StockScreenerParams(BaseModel):
+    use_rsi: bool = False
+    rsi_min: float = 30.0
+    rsi_max: float = 70.0
+    use_macd: bool = False
+    macd_signal: str = 'any'
+    use_vwap: bool = False
+    vwap_position: str = 'any'
+    use_pe: bool = False
+    pe_min: float = 5.0
+    pe_max: float = 30.0
+    use_market_cap: bool = False
+    market_cap_min: float = 1000000000.0
+    market_cap_max: float = 1000000000000.0
+    use_volume: bool = False
+    volume_min: float = 1000000.0
+    use_price: bool = False
+    price_min: float = 1.0
+    price_max: float = 1000.0
+    sector: str = 'any'
 
 # Popular stock symbols
 POPULAR_STOCKS = {
@@ -633,6 +660,132 @@ def calculate_vwap(df):
         return df['Close'].iloc[-1] if len(df) > 0 else 0.0
 
 
+# ==================== OPTIMIZED CACHING FUNCTIONS ====================
+
+@lru_cache(maxsize=200)
+def get_cached_stock_data(symbol: str, cache_key: str):
+    """Cache stock data - cache_key changes every 5 minutes for fresh data"""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30)  # Reduced from 90 to 30 days
+    
+    try:
+        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"Error downloading {symbol}: {e}")
+        return None
+
+@lru_cache(maxsize=200)
+def get_cached_ticker_info(symbol: str, cache_key: str):
+    """Cache ticker info - cache_key changes every 5 minutes"""
+    try:
+        ticker = yf.Ticker(symbol)
+        return ticker.info
+    except Exception as e:
+        print(f"Error getting info for {symbol}: {e}")
+        return {}
+
+def get_cache_key():
+    """Generate cache key that changes every 5 minutes"""
+    return datetime.now().strftime('%Y%m%d%H%M')[:-1] + '0'
+
+
+# ==================== OPTIMIZED STOCK SCREENING ====================
+
+def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
+    """Process a single stock with all filters - optimized with fail-fast approach"""
+    try:
+        cache_key = get_cache_key()
+        
+        # Get cached data
+        df = get_cached_stock_data(symbol, cache_key)
+        if df is None or df.empty or len(df) < 2:
+            return None
+        
+        # Basic metrics
+        current_price = float(df['Close'].iloc[-1])
+        volume = int(df['Volume'].iloc[-1])
+        
+        # Quick filters first (fail fast) - cheapest operations
+        if params['use_price']:
+            if current_price < params['price_min'] or current_price > params['price_max']:
+                return None
+        
+        if params['use_volume']:
+            if volume < params['volume_min']:
+                return None
+        
+        # Get ticker info
+        ticker_info = get_cached_ticker_info(symbol, cache_key)
+        market_cap = ticker_info.get('marketCap', 0)
+        pe_ratio = ticker_info.get('trailingPE', 0) if ticker_info.get('trailingPE') else 0
+        sector = ticker_info.get('sector', 'Unknown')
+        company_name = ticker_info.get('longName', f"{symbol} Corporation")
+        
+        # Sector filter
+        if params['sector'] != 'any' and sector != params['sector']:
+            return None
+        
+        # Market cap filter
+        if params['use_market_cap']:
+            if market_cap < params['market_cap_min'] or market_cap > params['market_cap_max']:
+                return None
+        
+        # P/E filter
+        if params['use_pe']:
+            if pe_ratio <= 0 or pe_ratio < params['pe_min'] or pe_ratio > params['pe_max']:
+                return None
+        
+        # Calculate technical indicators only if needed
+        rsi_value = 50.0
+        if params['use_rsi']:
+            rsi_value = calculate_rsi(df['Close'].values, window=14)
+            if rsi_value < params['rsi_min'] or rsi_value > params['rsi_max']:
+                return None
+        
+        macd_value = 0.0
+        if params['use_macd']:
+            macd_value = calculate_macd(df['Close'].values)
+            if params['macd_signal'] == 'bullish' and macd_value <= 0:
+                return None
+            elif params['macd_signal'] == 'bearish' and macd_value >= 0:
+                return None
+        
+        vwap_value = 0.0
+        if params['use_vwap']:
+            vwap_value = calculate_vwap(df)
+            if params['vwap_position'] == 'above' and current_price <= vwap_value:
+                return None
+            elif params['vwap_position'] == 'below' and current_price >= vwap_value:
+                return None
+        
+        # Calculate change
+        previous_close = df['Close'].iloc[-2]
+        change = current_price - previous_close
+        change_percent = (change / previous_close) * 100
+        
+        return {
+            'symbol': symbol,
+            'company_name': company_name,
+            'sector': sector,
+            'current_price': round(current_price, 2),
+            'change': round(change, 2),
+            'change_percent': round(change_percent, 2),
+            'volume': volume,
+            'market_cap': market_cap,
+            'pe_ratio': round(pe_ratio, 2) if pe_ratio > 0 else 0.0,
+            'rsi': round(rsi_value, 2),
+            'macd': round(macd_value, 2),
+            'vwap': round(vwap_value, 2) if params['use_vwap'] else 0.0,
+        }
+        
+    except Exception as e:
+        print(f"Error processing {symbol}: {str(e)}")
+        return None
+
+
 # ==================== API ENDPOINTS ====================
 
 @app.get("/")
@@ -874,142 +1027,68 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-class StockScreenerParams(BaseModel):
-    use_rsi: bool = False
-    rsi_min: float = 30.0
-    rsi_max: float = 70.0
-    use_macd: bool = False
-    macd_signal: str = 'any'
-    use_vwap: bool = False
-    vwap_position: str = 'any'
-    use_pe: bool = False
-    pe_min: float = 5.0
-    pe_max: float = 30.0
-    use_market_cap: bool = False
-    market_cap_min: float = 1000000000.0
-    market_cap_max: float = 1000000000000.0
-    use_volume: bool = False
-    volume_min: float = 1000000.0
-    use_price: bool = False
-    price_min: float = 1.0
-    price_max: float = 1000.0
-    sector: str = 'any'
-
-
 @app.post("/screen-stocks")
-def screen_stocks(params: StockScreenerParams):
-    """Screen stocks based on various technical and fundamental criteria"""
+async def screen_stocks(params: StockScreenerParams):
+    """Optimized stock screener with parallel processing"""
     try:
         stock_symbols = list(POPULAR_STOCKS.keys())
-        results = []
         
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=90)
+        # Convert params to dict for easier passing
+        params_dict = {
+            'use_rsi': params.use_rsi,
+            'rsi_min': params.rsi_min,
+            'rsi_max': params.rsi_max,
+            'use_macd': params.use_macd,
+            'macd_signal': params.macd_signal,
+            'use_vwap': params.use_vwap,
+            'vwap_position': params.vwap_position,
+            'use_pe': params.use_pe,
+            'pe_min': params.pe_min,
+            'pe_max': params.pe_max,
+            'use_market_cap': params.use_market_cap,
+            'market_cap_min': params.market_cap_min,
+            'market_cap_max': params.market_cap_max,
+            'use_volume': params.use_volume,
+            'volume_min': params.volume_min,
+            'use_price': params.use_price,
+            'price_min': params.price_min,
+            'price_max': params.price_max,
+            'sector': params.sector,
+        }
         
-        for symbol in stock_symbols:
-            try:
-                ticker = yf.Ticker(symbol)
-                df = yf.download(symbol, start=start_date, end=end_date, progress=False)
-                
-                if df.empty:
-                    continue
-                
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-                
-                info = ticker.info
-                current_price = float(df['Close'].iloc[-1])
-                volume = int(df['Volume'].iloc[-1])
-                market_cap = float(info.get('marketCap', 0))
-                pe_ratio = float(info.get('trailingPE', 0)) if info.get('trailingPE') else 0.0
-                sector = info.get('sector', 'Unknown')
-                company_name = info.get('longName', f"{symbol} Corporation")
-                
-                passes_filters = True
-                
-                if params.sector != 'any':
-                    if sector != params.sector:
-                        passes_filters = False
-                        continue
-                
-                if params.use_price:
-                    if current_price < params.price_min or current_price > params.price_max:
-                        passes_filters = False
-                        continue
-                
-                if params.use_volume:
-                    if volume < params.volume_min:
-                        passes_filters = False
-                        continue
-                
-                if params.use_market_cap:
-                    if market_cap < params.market_cap_min or market_cap > params.market_cap_max:
-                        passes_filters = False
-                        continue
-                
-                if params.use_pe:
-                    if pe_ratio <= 0 or pe_ratio < params.pe_min or pe_ratio > params.pe_max:
-                        passes_filters = False
-                        continue
-                
-                rsi_value = 50.0
-                if params.use_rsi:
-                    rsi_value = calculate_rsi(df['Close'].values, window=14)
-                    if rsi_value < params.rsi_min or rsi_value > params.rsi_max:
-                        passes_filters = False
-                        continue
-                
-                macd_value = 0.0
-                if params.use_macd:
-                    macd_value = calculate_macd(df['Close'].values)
-                    if params.macd_signal == 'bullish' and macd_value <= 0:
-                        passes_filters = False
-                        continue
-                    elif params.macd_signal == 'bearish' and macd_value >= 0:
-                        passes_filters = False
-                        continue
-                
-                vwap_value = 0.0
-                if params.use_vwap:
-                    vwap_value = calculate_vwap(df)
-                    if params.vwap_position == 'above' and current_price <= vwap_value:
-                        passes_filters = False
-                        continue
-                    elif params.vwap_position == 'below' and current_price >= vwap_value:
-                        passes_filters = False
-                        continue
-                
-                if passes_filters:
-                    previous_close = df['Close'].iloc[-2] if len(df) > 1 else current_price
-                    change = current_price - previous_close
-                    change_percent = (change / previous_close) * 100
-                    
-                    results.append({
-                        'symbol': symbol,
-                        'company_name': company_name,
-                        'sector': sector,
-                        'current_price': round(current_price, 2),
-                        'change': round(change, 2),
-                        'change_percent': round(change_percent, 2),
-                        'volume': volume,
-                        'market_cap': market_cap,
-                        'pe_ratio': round(pe_ratio, 2) if pe_ratio > 0 else 0.0,
-                        'rsi': round(rsi_value, 2),
-                        'macd': round(macd_value, 2),
-                        'vwap': round(vwap_value, 2) if params.use_vwap else 0.0,
-                    })
-                
-            except Exception as e:
-                print(f"Error processing {symbol}: {str(e)}")
-                continue
+        # Process stocks in parallel using ThreadPoolExecutor
+        loop = asyncio.get_event_loop()
         
+        async def process_stock_async(symbol):
+            return await loop.run_in_executor(
+                executor,
+                process_single_stock,
+                symbol,
+                params_dict
+            )
+        
+        # Process all stocks concurrently
+        results_futures = [process_stock_async(symbol) for symbol in stock_symbols]
+        all_results = await asyncio.gather(*results_futures)
+        
+        # Filter out None results and sort
+        results = [r for r in all_results if r is not None]
         results.sort(key=lambda x: x['symbol'])
+        
         return results
         
     except Exception as e:
         print(f"Error in stock screener: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Stock screener failed: {str(e)}")
+
+
+@app.post("/clear-cache")
+def clear_screening_cache():
+    """Clear the stock data cache"""
+    get_cached_stock_data.cache_clear()
+    get_cached_ticker_info.cache_clear()
+    return {"message": "Cache cleared successfully", "timestamp": datetime.now().isoformat()}
 
 
 if __name__ == "__main__":
