@@ -132,22 +132,55 @@ class CompanyInfoCard extends StatelessWidget {
                 ),
               ],
             ),
+            
+            const SizedBox(height: 12),
+            
+            // New Financial Metrics Row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricItem(
+                    'ROE',
+                    '${(stockData['roe'] ?? 0.0).toStringAsFixed(2)}%',
+                    Icons.percent,
+                    color: _getROEColor(stockData['roe'] ?? 0.0),
+                  ),
+                ),
+                Expanded(
+                  child: _buildMetricItem(
+                    'D/E Ratio',
+                    (stockData['debt_to_equity'] ?? 0.0).toStringAsFixed(2),
+                    Icons.balance,
+                    color: _getDebtColor(stockData['debt_to_equity'] ?? 0.0),
+                  ),
+                ),
+                Expanded(
+                  child: _buildMetricItem(
+                    'P/B Ratio',
+                    (stockData['pb_ratio'] ?? 0.0).toStringAsFixed(2),
+                    Icons.library_books,
+                    color: _getPBColor(stockData['pb_ratio'] ?? 0.0),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMetricItem(String label, String value, IconData icon) {
+  Widget _buildMetricItem(String label, String value, IconData icon, {Color? color}) {
     return Column(
       children: [
-        Icon(icon, size: 20, color: Colors.grey.shade600),
+        Icon(icon, size: 20, color: color ?? Colors.grey.shade600),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 14,
+            color: color,
           ),
         ),
         Text(
@@ -159,6 +192,24 @@ class CompanyInfoCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Color _getROEColor(double roe) {
+    if (roe >= 15) return Colors.green.shade700;
+    if (roe >= 10) return Colors.orange.shade700;
+    return Colors.red.shade700;
+  }
+
+  Color _getDebtColor(double debtToEquity) {
+    if (debtToEquity < 0.5) return Colors.green.shade700;
+    if (debtToEquity < 1.0) return Colors.orange.shade700;
+    return Colors.red.shade700;
+  }
+
+  Color _getPBColor(double pbRatio) {
+    if (pbRatio < 1.5) return Colors.green.shade700;
+    if (pbRatio < 3.0) return Colors.orange.shade700;
+    return Colors.red.shade700;
   }
 
   String _formatVolume(int volume) {
