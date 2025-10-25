@@ -1,25 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-
-class StockSuggestion {
-  final String symbol;
-  final String companyName;
-  final String matchType;
-
-  StockSuggestion({
-    required this.symbol,
-    required this.companyName,
-    required this.matchType,
-  });
-
-  factory StockSuggestion.fromJson(Map<String, dynamic> json) {
-    return StockSuggestion(
-      symbol: json['symbol'] ?? '',
-      companyName: json['company_name'] ?? '',
-      matchType: json['match_type'] ?? 'symbol',
-    );
-  }
-}
+import '../services/api_service.dart';
 
 class StockAutocomplete extends StatefulWidget {
   final TextEditingController controller;
@@ -41,6 +22,7 @@ class StockAutocomplete extends StatefulWidget {
 
 class _StockAutocompleteState extends State<StockAutocomplete> {
   final _focusNode = FocusNode();
+  final _apiService = ApiService();
   
   List<StockSuggestion> _suggestions = [];
   bool _isLoadingSuggestions = false;
@@ -94,7 +76,6 @@ class _StockAutocompleteState extends State<StockAutocomplete> {
     }
   }
 
-  // Mock data for testing - replace with actual API call
   Future<void> _fetchSuggestions(String query) async {
     if (query.length < 1) return;
 
@@ -103,16 +84,13 @@ class _StockAutocompleteState extends State<StockAutocomplete> {
     });
 
     try {
-      // Simulate API call delay
-      await Future.delayed(const Duration(milliseconds: 200));
-      
-      // Mock suggestions - replace this with actual API service call
-      final mockSuggestions = _getMockSuggestions(query);
+      // Use the actual API service to fetch suggestions
+      final suggestions = await _apiService.getStockSuggestions(query);
       
       if (mounted) {
         setState(() {
-          _suggestions = mockSuggestions;
-          _showSuggestions = mockSuggestions.isNotEmpty;
+          _suggestions = suggestions;
+          _showSuggestions = suggestions.isNotEmpty;
           _isLoadingSuggestions = false;
         });
       }
@@ -125,49 +103,6 @@ class _StockAutocompleteState extends State<StockAutocomplete> {
         });
       }
     }
-  }
-
-  List<StockSuggestion> _getMockSuggestions(String query) {
-    final mockData = {
-      'AAPL': 'Apple Inc.',
-      'MSFT': 'Microsoft Corporation',
-      'GOOGL': 'Alphabet Inc.',
-      'AMZN': 'Amazon.com Inc.',
-      'TSLA': 'Tesla Inc.',
-      'NVDA': 'NVIDIA Corporation',
-      'META': 'Meta Platforms Inc.',
-      'NFLX': 'Netflix Inc.',
-      'JPM': 'JPMorgan Chase & Co.',
-      'V': 'Visa Inc.',
-    };
-
-    final suggestions = <StockSuggestion>[];
-    final queryUpper = query.toUpperCase();
-    
-    // Search by symbol first
-    for (final entry in mockData.entries) {
-      if (entry.key.startsWith(queryUpper)) {
-        suggestions.add(StockSuggestion(
-          symbol: entry.key,
-          companyName: entry.value,
-          matchType: 'symbol',
-        ));
-      }
-    }
-    
-    // Then search by company name
-    for (final entry in mockData.entries) {
-      if (!suggestions.any((s) => s.symbol == entry.key) &&
-          entry.value.toLowerCase().contains(query.toLowerCase())) {
-        suggestions.add(StockSuggestion(
-          symbol: entry.key,
-          companyName: entry.value,
-          matchType: 'company',
-        ));
-      }
-    }
-    
-    return suggestions.take(5).toList();
   }
 
   void _selectSuggestion(StockSuggestion suggestion) {
@@ -190,7 +125,7 @@ class _StockAutocompleteState extends State<StockAutocomplete> {
                 focusNode: _focusNode,
                 decoration: InputDecoration(
                   labelText: 'Search Stock Symbol or Company Name',
-                  hintText: 'e.g., AAPL, Apple, Microsoft, TSLA',
+                  hintText: 'e.g., AAPL, Apple, RELIANCE, TCS',
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _isLoadingSuggestions
@@ -237,7 +172,7 @@ class _StockAutocompleteState extends State<StockAutocomplete> {
         if (_showSuggestions && _suggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
-            constraints: const BoxConstraints(maxHeight: 200),
+            constraints: const BoxConstraints(maxHeight: 250),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(8),
