@@ -44,11 +44,11 @@ class ApiService {
   // API URL based on platform
   String get baseUrl {
     if (kIsWeb) {
-      return 'http://localhost:8000';
+      return 'https://rtdebnd.onrender.com/';
     } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
+      return 'https://rtdebnd.onrender.com/';
     } else {
-      return 'http://localhost:8000';
+      return 'https://rtdebnd.onrender.com/';
     }
   }
 
@@ -138,7 +138,6 @@ class ApiService {
     required Map<String, dynamic> strategyParams,
   }) async {
     try {
-      // Build the request body with strategy parameters
       final Map<String, dynamic> requestBody = {
         'stocks': stocks.map((s) => s.toJson()).toList(),
         'start_date': startDate,
@@ -148,7 +147,6 @@ class ApiService {
         'rebalance_frequency': rebalanceFrequency,
       };
 
-      // Add all strategy parameters to the request
       requestBody.addAll(strategyParams);
 
       final response = await http.post(

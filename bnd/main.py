@@ -8,8 +8,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional, List
-import requests
-import json
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
@@ -83,30 +81,6 @@ class PortfolioStrategyInput(BaseModel):
         except ValueError:
             raise ValueError('Date must be in YYYY-MM-DD format')
 
-class BacktestResult(BaseModel):
-    final_value: float
-    initial_value: float
-    total_return: float
-    total_return_pct: float
-    total_trades: int
-    winning_trades: int
-    losing_trades: int
-    win_rate: float
-    max_drawdown: float
-
-class PortfolioBacktestResult(BaseModel):
-    final_value: float
-    initial_value: float
-    total_return: float
-    total_return_pct: float
-    total_trades: int
-    winning_trades: int
-    losing_trades: int
-    win_rate: float
-    max_drawdown: float
-    stock_performances: List[dict]
-    portfolio_composition: List[dict]
-
 class StockInfo(BaseModel):
     symbol: str
     company_name: str
@@ -138,6 +112,17 @@ class StockInfo(BaseModel):
     analyst_hold: int
     analyst_sell: int
     target_price: float
+    # New fields for frontend compatibility
+    roe: float = 0.0
+    debt_to_equity: float = 0.0
+    pb_ratio: float = 0.0
+    # Shareholding pattern fields
+    promoter_holding: float = 0.0
+    public_holding: float = 0.0
+    institutional_holding: float = 0.0
+    shareholding_date: str = "Latest Quarter"
+    major_shareholders: list = []
+    recent_news: list = []
 
 class StockScreenerParams(BaseModel):
     use_rsi: bool = False
@@ -160,7 +145,7 @@ class StockScreenerParams(BaseModel):
     price_max: float = 1000.0
     sector: str = 'any'
 
-# Popular stock symbols
+# Popular stock symbols (keeping your existing list)
 POPULAR_STOCKS = {
     'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corporation', 'GOOGL': 'Alphabet Inc. Class A',
     'GOOG': 'Alphabet Inc. Class C', 'AMZN': 'Amazon.com Inc.', 'TSLA': 'Tesla Inc.',
@@ -184,9 +169,62 @@ POPULAR_STOCKS = {
     'HON': 'Honeywell International Inc.', 'VZ': 'Verizon Communications Inc.', 'T': 'AT&T Inc.',
     'TMUS': 'T-Mobile US Inc.', 'AMT': 'American Tower Corporation', 'PLD': 'Prologis Inc.',
     'CCI': 'Crown Castle International Corp.',
+    # Indian Companies - NSE
+    'RELIANCE.NS': 'Reliance Industries Limited',
+    'TCS.NS': 'Tata Consultancy Services Limited',
+    'HDFCBANK.NS': 'HDFC Bank Limited',
+    'INFY.NS': 'Infosys Limited',
+    'ICICIBANK.NS': 'ICICI Bank Limited',
+    'HINDUNILVR.NS': 'Hindustan Unilever Limited',
+    'SBIN.NS': 'State Bank of India',
+    'BHARTIARTL.NS': 'Bharti Airtel Limited',
+    'ITC.NS': 'ITC Limited',
+    'KOTAKBANK.NS': 'Kotak Mahindra Bank Limited',
+    'LT.NS': 'Larsen & Toubro Limited',
+    'AXISBANK.NS': 'Axis Bank Limited',
+    'BAJFINANCE.NS': 'Bajaj Finance Limited',
+    'ASIANPAINT.NS': 'Asian Paints Limited',
+    'MARUTI.NS': 'Maruti Suzuki India Limited',
+    'TITAN.NS': 'Titan Company Limited',
+    'WIPRO.NS': 'Wipro Limited',
+    'HCLTECH.NS': 'HCL Technologies Limited',
+    'TECHM.NS': 'Tech Mahindra Limited',
+    'ULTRACEMCO.NS': 'UltraTech Cement Limited',
+    'SUNPHARMA.NS': 'Sun Pharmaceutical Industries Limited',
+    'NESTLEIND.NS': 'Nestle India Limited',
+    'POWERGRID.NS': 'Power Grid Corporation of India Limited',
+    'NTPC.NS': 'NTPC Limited',
+    'ONGC.NS': 'Oil and Natural Gas Corporation Limited',
+    'TATAMOTORS.NS': 'Tata Motors Limited',
+    'TATASTEEL.NS': 'Tata Steel Limited',
+    'ADANIENT.NS': 'Adani Enterprises Limited',
+    'ADANIPORTS.NS': 'Adani Ports and Special Economic Zone Limited',
+    'JSWSTEEL.NS': 'JSW Steel Limited',
+    'COALINDIA.NS': 'Coal India Limited',
+    'INDUSINDBK.NS': 'IndusInd Bank Limited',
+    'BAJAJFINSV.NS': 'Bajaj Finserv Limited',
+    'HINDALCO.NS': 'Hindalco Industries Limited',
+    'GRASIM.NS': 'Grasim Industries Limited',
+    'HEROMOTOCO.NS': 'Hero MotoCorp Limited',
+    'EICHERMOT.NS': 'Eicher Motors Limited',
+    'DIVISLAB.NS': "Divi's Laboratories Limited",
+    'DRREDDY.NS': "Dr. Reddy's Laboratories Limited",
+    'CIPLA.NS': 'Cipla Limited',
+    'BRITANNIA.NS': 'Britannia Industries Limited',
+    'APOLLOHOSP.NS': 'Apollo Hospitals Enterprise Limited',
+    'BPCL.NS': 'Bharat Petroleum Corporation Limited',
+    'IOC.NS': 'Indian Oil Corporation Limited',
+    'GAIL.NS': 'GAIL (India) Limited',
+    'SHREECEM.NS': 'Shree Cement Limited',
+    'VEDL.NS': 'Vedanta Limited',
+    'TATACONSUM.NS': 'Tata Consumer Products Limited',
+    'M&M.NS': 'Mahindra & Mahindra Limited',
 }
 
+
 # ==================== STRATEGY CLASSES ====================
+# (Keep all your existing strategy classes: RSIStrategy, MACDStrategy, VolumeSpikeStrategy,
+#  PortfolioRSIStrategy, PortfolioMACDStrategy, PortfolioVolumeSpikeStrategy)
 
 class RSIStrategy(bt.Strategy):
     params = (
@@ -238,11 +276,9 @@ class MACDStrategy(bt.Strategy):
 
     def next(self):
         if not self.position:
-            # Buy when MACD line crosses above signal line
             if self.macd.macd[0] > self.macd.signal[0] and self.macd.macd[-1] <= self.macd.signal[-1]:
                 self.buy(size=None)
         else:
-            # Sell when MACD line crosses below signal line
             if self.macd.macd[0] < self.macd.signal[0] and self.macd.macd[-1] >= self.macd.signal[-1]:
                 self.sell(size=self.position.size)
 
@@ -271,13 +307,11 @@ class VolumeSpikeStrategy(bt.Strategy):
 
     def next(self):
         if not self.position:
-            # Buy when volume exceeds threshold
             if self.data.volume[0] > (self.volume_sma[0] * self.params.volume_multiplier):
                 self.buy(size=None)
                 self.hold_counter = 0
         else:
             self.hold_counter += 1
-            # Sell after holding for specified days
             if self.hold_counter >= self.params.hold_days:
                 self.sell(size=self.position.size)
                 self.hold_counter = 0
@@ -290,8 +324,6 @@ class VolumeSpikeStrategy(bt.Strategy):
             else:
                 self.losing_trades += 1
 
-
-# ==================== PORTFOLIO STRATEGIES ====================
 
 class PortfolioRSIStrategy(bt.Strategy):
     params = (
@@ -374,7 +406,6 @@ class PortfolioMACDStrategy(bt.Strategy):
             allocation = self.params.allocations.get(d._name, 0) / 100.0
             
             if not pos:
-                # Buy when MACD crosses above signal
                 if len(d) > 1:
                     if macd.macd[0] > macd.signal[0] and macd.macd[-1] <= macd.signal[-1]:
                         available_cash = self.broker.getcash()
@@ -383,7 +414,6 @@ class PortfolioMACDStrategy(bt.Strategy):
                         if size > 0:
                             self.buy(data=d, size=size)
             else:
-                # Sell when MACD crosses below signal
                 if len(d) > 1:
                     if macd.macd[0] < macd.signal[0] and macd.macd[-1] >= macd.signal[-1]:
                         self.sell(data=d, size=pos.size)
@@ -429,7 +459,6 @@ class PortfolioVolumeSpikeStrategy(bt.Strategy):
             allocation = self.params.allocations.get(d._name, 0) / 100.0
             
             if not pos:
-                # Buy on volume spike
                 if d.volume[0] > (volume_sma[0] * self.params.volume_multiplier):
                     available_cash = self.broker.getcash()
                     target_value = available_cash * allocation
@@ -439,7 +468,6 @@ class PortfolioVolumeSpikeStrategy(bt.Strategy):
                         self.hold_counters[d._name] = 0
             else:
                 self.hold_counters[d._name] += 1
-                # Sell after holding period
                 if self.hold_counters[d._name] >= self.params.hold_days:
                     self.sell(data=d, size=pos.size)
                     self.hold_counters[d._name] = 0
@@ -455,6 +483,7 @@ class PortfolioVolumeSpikeStrategy(bt.Strategy):
 
 
 # ==================== HELPER FUNCTIONS ====================
+# (Keep all your existing helper functions)
 
 def calculate_rsi(prices, window=14):
     try:
@@ -666,7 +695,7 @@ def calculate_vwap(df):
 def get_cached_stock_data(symbol: str, cache_key: str):
     """Cache stock data - cache_key changes every 5 minutes for fresh data"""
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=30)  # Reduced from 90 to 30 days
+    start_date = end_date - timedelta(days=30)
     
     try:
         df = yf.download(symbol, start=start_date, end=end_date, progress=False)
@@ -699,16 +728,13 @@ def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
     try:
         cache_key = get_cache_key()
         
-        # Get cached data
         df = get_cached_stock_data(symbol, cache_key)
         if df is None or df.empty or len(df) < 2:
             return None
         
-        # Basic metrics
         current_price = float(df['Close'].iloc[-1])
         volume = int(df['Volume'].iloc[-1])
         
-        # Quick filters first (fail fast) - cheapest operations
         if params['use_price']:
             if current_price < params['price_min'] or current_price > params['price_max']:
                 return None
@@ -717,28 +743,23 @@ def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
             if volume < params['volume_min']:
                 return None
         
-        # Get ticker info
         ticker_info = get_cached_ticker_info(symbol, cache_key)
         market_cap = ticker_info.get('marketCap', 0)
         pe_ratio = ticker_info.get('trailingPE', 0) if ticker_info.get('trailingPE') else 0
         sector = ticker_info.get('sector', 'Unknown')
         company_name = ticker_info.get('longName', f"{symbol} Corporation")
         
-        # Sector filter
         if params['sector'] != 'any' and sector != params['sector']:
             return None
         
-        # Market cap filter
         if params['use_market_cap']:
             if market_cap < params['market_cap_min'] or market_cap > params['market_cap_max']:
                 return None
         
-        # P/E filter
         if params['use_pe']:
             if pe_ratio <= 0 or pe_ratio < params['pe_min'] or pe_ratio > params['pe_max']:
                 return None
         
-        # Calculate technical indicators only if needed
         rsi_value = 50.0
         if params['use_rsi']:
             rsi_value = calculate_rsi(df['Close'].values, window=14)
@@ -761,7 +782,6 @@ def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
             elif params['vwap_position'] == 'below' and current_price >= vwap_value:
                 return None
         
-        # Calculate change
         previous_close = df['Close'].iloc[-2]
         change = current_price - previous_close
         change_percent = (change / previous_close) * 100
@@ -832,6 +852,11 @@ def get_stock_info(symbol: str):
         tech_indicators = calculate_technical_indicators(df)
         sentiment_data = generate_sentiment_data(symbol, current_price, change_percent)
         
+        # Calculate additional financial metrics
+        roe = float(info.get('returnOnEquity', 0) * 100) if info.get('returnOnEquity') else 0.0
+        debt_to_equity = float(info.get('debtToEquity', 0) / 100) if info.get('debtToEquity') else 0.0
+        pb_ratio = float(info.get('priceToBook', 0)) if info.get('priceToBook') else 0.0
+        
         return StockInfo(
             symbol=symbol,
             company_name=info.get('longName', f"{symbol} Corporation"),
@@ -863,6 +888,9 @@ def get_stock_info(symbol: str):
             analyst_hold=max(1, int(3 + np.random.normal(0, 0.5))),
             analyst_sell=max(0, int(2 - (change_percent * 0.3) + np.random.normal(0, 0.5))),
             target_price=float(current_price * np.random.uniform(1.05, 1.15)),
+            roe=roe,
+            debt_to_equity=debt_to_equity,
+            pb_ratio=pb_ratio,
         )
         
     except HTTPException:
@@ -873,7 +901,7 @@ def get_stock_info(symbol: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock information: {str(e)}")
 
 
-@app.post("/backtest-portfolio", response_model=PortfolioBacktestResult)
+@app.post("/backtest-portfolio")
 def run_portfolio_backtest(data: PortfolioStrategyInput):
     try:
         start_dt = datetime.strptime(data.start_date, '%Y-%m-%d')
@@ -886,10 +914,8 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
 
         cerebro = bt.Cerebro()
         
-        # Prepare allocations dict
         allocations = {stock.ticker: stock.allocation for stock in data.stocks}
         
-        # Select strategy based on input
         if data.strategy == "RSI":
             cerebro.addstrategy(
                 PortfolioRSIStrategy,
@@ -917,7 +943,6 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         else:
             raise HTTPException(status_code=400, detail=f"Unknown strategy: {data.strategy}")
 
-        # Download data for all stocks
         stock_data = {}
         for stock in data.stocks:
             try:
@@ -935,7 +960,6 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to download data for {stock.ticker}: {str(e)}")
 
-        # Add data feeds to cerebro
         for ticker, df in stock_data.items():
             data_feed = bt.feeds.PandasData(
                 dataname=df,
@@ -972,7 +996,6 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
         max_drawdown = drawdown_analyzer.get('max', {}).get('drawdown', 0)
 
-        # Calculate individual stock performances
         stock_performances = []
         portfolio_composition = []
         
@@ -980,7 +1003,6 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
             position_value = 0
             position_size = 0
             
-            # Get position for this stock
             for d in strategy.datas:
                 if d._name == ticker:
                     pos = strategy.getposition(d)
@@ -1005,19 +1027,19 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
                 'actual_allocation': round((position_value / final_value * 100), 2) if final_value > 0 else 0
             })
 
-        return PortfolioBacktestResult(
-            final_value=round(final_value, 2),
-            initial_value=round(initial_value, 2),
-            total_return=round(total_return, 2),
-            total_return_pct=round(total_return_pct, 2),
-            total_trades=total_trades,
-            winning_trades=won_trades,
-            losing_trades=lost_trades,
-            win_rate=round(win_rate, 2),
-            max_drawdown=round(max_drawdown, 2),
-            stock_performances=stock_performances,
-            portfolio_composition=portfolio_composition
-        )
+        return {
+            'final_value': round(final_value, 2),
+            'initial_value': round(initial_value, 2),
+            'total_return': round(total_return, 2),
+            'total_return_pct': round(total_return_pct, 2),
+            'total_trades': total_trades,
+            'winning_trades': won_trades,
+            'losing_trades': lost_trades,
+            'win_rate': round(win_rate, 2),
+            'max_drawdown': round(max_drawdown, 2),
+            'stock_performances': stock_performances,
+            'portfolio_composition': portfolio_composition
+        }
 
     except HTTPException:
         raise
@@ -1033,7 +1055,6 @@ async def screen_stocks(params: StockScreenerParams):
     try:
         stock_symbols = list(POPULAR_STOCKS.keys())
         
-        # Convert params to dict for easier passing
         params_dict = {
             'use_rsi': params.use_rsi,
             'rsi_min': params.rsi_min,
@@ -1056,7 +1077,6 @@ async def screen_stocks(params: StockScreenerParams):
             'sector': params.sector,
         }
         
-        # Process stocks in parallel using ThreadPoolExecutor
         loop = asyncio.get_event_loop()
         
         async def process_stock_async(symbol):
@@ -1067,11 +1087,9 @@ async def screen_stocks(params: StockScreenerParams):
                 params_dict
             )
         
-        # Process all stocks concurrently
         results_futures = [process_stock_async(symbol) for symbol in stock_symbols]
         all_results = await asyncio.gather(*results_futures)
         
-        # Filter out None results and sort
         results = [r for r in all_results if r is not None]
         results.sort(key=lambda x: x['symbol'])
         
