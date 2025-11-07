@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../widgets/company_info_card.dart';
 import '../widgets/technical_analysis_card.dart';
-import '../widgets/sentiment_card.dart';
 import '../widgets/stock_autocomplete.dart';
 import 'backtest_screen.dart';
 import 'stock_screener_screen.dart';
+import 'connection_test_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -40,6 +40,44 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadMarketData();
+    _checkBackendConnection();
+  }
+
+  Future<void> _checkBackendConnection() async {
+    try {
+      final isConnected = await _apiService.checkConnection();
+      if (!isConnected && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.white),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Backend connection issue. Tap to test connection.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'TEST',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ConnectionTestScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Connection check error: $e');
+    }
   }
 
   Future<void> _loadMarketData() async {
@@ -101,20 +139,63 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
+      print('Searching for stock: $searchTerm');
       final data = await _apiService.getStockInfo(searchTerm.toUpperCase());
+      print('Stock data received: ${data['symbol']}');
+      
       setState(() {
         _stockData = data;
         _currentSymbol = searchTerm.toUpperCase();
       });
     } catch (e) {
+      print('Error searching stock: $e');
       setState(() {
         _error = e.toString();
       });
+      
+      // Show more helpful error messages
+      if (e.toString().contains('timed out')) {
+        _showErrorSnackBar('Request timed out. The server might be waking up (Render free tier). Please try again in 30 seconds.');
+      } else if (e.toString().contains('No internet')) {
+        _showErrorSnackBar('No internet connection. Please check your network.');
+      } else if (e.toString().contains('not found')) {
+        _showErrorSnackBar('Stock symbol "$searchTerm" not found. Please check the symbol and try again.');
+      }
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: accentRed,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'TEST',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ConnectionTestScreen(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   String _extractSymbolFromText(String text) {
@@ -179,6 +260,19 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: secondaryBg,
         elevation: 0,
         actions: [
+          // Connection Test Button
+          IconButton(
+            icon: Icon(Icons.network_check, color: accentCyan),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ConnectionTestScreen(),
+                ),
+              );
+            },
+            tooltip: 'Test Connection',
+          ),
           if (_stockData != null)
             IconButton(
               icon: Icon(Icons.home_outlined, color: accentCyan),
@@ -204,7 +298,6 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
- 
               StockAutocomplete(
                 controller: _searchController,
                 onStockSelected: _onStockSelected,
@@ -228,14 +321,35 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
-                            child: Row(
+                            child: Column(
                               children: [
-                                Icon(Icons.warning_amber_rounded, color: accentRed),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _error!,
-                                    style: TextStyle(color: accentRed, fontWeight: FontWeight.w500),
+                                Row(
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded, color: accentRed),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _error!,
+                                        style: TextStyle(color: accentRed, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const ConnectionTestScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.troubleshoot),
+                                  label: const Text('Test Connection'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: accentRed,
+                                    foregroundColor: Colors.white,
                                   ),
                                 ),
                               ],
@@ -248,7 +362,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 16),
                         TechnicalAnalysisCard(stockData: _stockData!),
                         const SizedBox(height: 16),
-                        SentimentCard(stockData: _stockData!),
                       ],
 
                       // Market Overview - shown when no stock is searched

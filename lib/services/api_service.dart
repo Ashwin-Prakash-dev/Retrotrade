@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -41,53 +42,75 @@ class PortfolioStock {
 }
 
 class ApiService {
-  // API URL based on platform
+  // FIXED: Changed to HTTPS for Render deployment
   String get baseUrl {
-    if (kIsWeb) {
-      return 'https://rtdebnd.onrender.com/';
-    } else if (Platform.isAndroid) {
-      return 'https://rtdebnd.onrender.com/';
-    } else {
-      return 'https://rtdebnd.onrender.com/';
-    }
+    return 'https://rtdebnd.onrender.com';
   }
+
+  // Add timeout and better error handling
+  final Duration _timeout = const Duration(seconds: 30);
+
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
 
   Future<List<StockSuggestion>> getStockSuggestions(String query) async {
     try {
+      print('Fetching suggestions for: $query');
+      print('URL: $baseUrl/stock-suggestions?q=${Uri.encodeComponent(query)}');
+      
       final response = await http.get(
         Uri.parse('$baseUrl/stock-suggestions?q=${Uri.encodeComponent(query)}'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 5));
+        headers: _headers,
+      ).timeout(_timeout);
 
+      print('Suggestions response status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((item) => StockSuggestion.fromJson(item)).toList();
       } else {
+        print('Suggestions error: ${response.body}');
         return [];
       }
     } catch (e) {
+      print('Error fetching suggestions: $e');
       return [];
     }
   }
 
   Future<Map<String, dynamic>> getStockInfo(String symbol) async {
     try {
+      print('Fetching stock info for: $symbol');
+      print('URL: $baseUrl/stock-info/$symbol');
+      
       final response = await http.get(
         Uri.parse('$baseUrl/stock-info/$symbol'),
-        headers: {'Content-Type': 'application/json'},
-      );
+        headers: _headers,
+      ).timeout(_timeout);
+
+      print('Stock info response status: ${response.statusCode}');
+      print('Stock info response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else if (response.statusCode == 404) {
-        throw 'Stock symbol "$symbol" not found';
+        throw 'Stock symbol "$symbol" not found. Please check the symbol and try again.';
       } else {
         final errorData = jsonDecode(response.body);
         throw errorData['detail'] ?? 'Failed to fetch stock data';
       }
+    } on TimeoutException {
+      throw 'Request timed out. Please check your internet connection and try again.';
+    } on SocketException {
+      throw 'No internet connection. Please check your network and try again.';
+    } on FormatException {
+      throw 'Invalid response from server. Please try again later.';
     } catch (e) {
+      print('Error in getStockInfo: $e');
       if (e is String) rethrow;
-      throw 'Failed to connect to server: $e';
+      throw 'Failed to connect to server. Please check your internet connection.';
     }
   }
 
@@ -101,9 +124,11 @@ class ApiService {
     required double initialCash,
   }) async {
     try {
+      print('Running backtest for: $ticker');
+      
       final response = await http.post(
         Uri.parse('$baseUrl/backtest'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'ticker': ticker,
           'start_date': startDate,
@@ -114,7 +139,9 @@ class ApiService {
           'rsi_sell': rsiSell,
           'initial_cash': initialCash,
         }),
-      );
+      ).timeout(_timeout);
+
+      print('Backtest response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -122,7 +149,12 @@ class ApiService {
         final errorData = jsonDecode(response.body);
         throw errorData['detail'] ?? 'Backtest failed';
       }
+    } on TimeoutException {
+      throw 'Request timed out. Backtest may take longer for large date ranges.';
+    } on SocketException {
+      throw 'No internet connection. Please check your network and try again.';
     } catch (e) {
+      print('Error in runBacktest: $e');
       if (e is String) rethrow;
       throw 'Failed to connect to server: $e';
     }
@@ -138,6 +170,8 @@ class ApiService {
     required Map<String, dynamic> strategyParams,
   }) async {
     try {
+      print('Running portfolio backtest');
+      
       final Map<String, dynamic> requestBody = {
         'stocks': stocks.map((s) => s.toJson()).toList(),
         'start_date': startDate,
@@ -149,19 +183,29 @@ class ApiService {
 
       requestBody.addAll(strategyParams);
 
+      print('Request body: ${jsonEncode(requestBody)}');
+
       final response = await http.post(
         Uri.parse('$baseUrl/backtest-portfolio'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode(requestBody),
-      );
+      ).timeout(_timeout);
+
+      print('Portfolio backtest response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
+        print('Portfolio backtest error: ${response.body}');
         final errorData = jsonDecode(response.body);
         throw errorData['detail'] ?? 'Portfolio backtest failed';
       }
+    } on TimeoutException {
+      throw 'Request timed out. Portfolio backtest may take longer.';
+    } on SocketException {
+      throw 'No internet connection. Please check your network and try again.';
     } catch (e) {
+      print('Error in runPortfolioBacktest: $e');
       if (e is String) rethrow;
       throw 'Failed to connect to server: $e';
     }
@@ -189,6 +233,8 @@ class ApiService {
     String sector = 'any',
   }) async {
     try {
+      print('Screening stocks with filters');
+      
       final Map<String, dynamic> requestBody = {
         'use_rsi': useRsi,
         'rsi_min': rsiMin,
@@ -213,18 +259,26 @@ class ApiService {
 
       final response = await http.post(
         Uri.parse('$baseUrl/screen-stocks'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode(requestBody),
-      );
+      ).timeout(_timeout);
+
+      print('Screen stocks response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((item) => item as Map<String, dynamic>).toList();
       } else {
+        print('Screen stocks error: ${response.body}');
         final errorData = jsonDecode(response.body);
         throw errorData['detail'] ?? 'Stock screening failed';
       }
+    } on TimeoutException {
+      throw 'Request timed out. Stock screening may take a while.';
+    } on SocketException {
+      throw 'No internet connection. Please check your network and try again.';
     } catch (e) {
+      print('Error in screenStocks: $e');
       if (e is String) rethrow;
       throw 'Failed to connect to server: $e';
     }
@@ -232,13 +286,19 @@ class ApiService {
 
   Future<bool> checkConnection() async {
     try {
+      print('Checking connection to: $baseUrl/health');
+      
       final response = await http.get(
         Uri.parse('$baseUrl/health'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 5));
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+
+      print('Health check response status: ${response.statusCode}');
+      print('Health check response body: ${response.body}');
 
       return response.statusCode == 200;
     } catch (e) {
+      print('Health check error: $e');
       return false;
     }
   }
