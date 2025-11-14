@@ -1,3 +1,68 @@
+def rate_limited_download(symbol: str, start, end, max_retries=3):
+    """Download stock data with rate limiting and retry logic"""
+    global LAST_REQUEST_TIME
+    
+    # Rate limiting
+    current_time = time.time()
+    if symbol in LAST_REQUEST_TIME:
+        time_since_last = current_time - LAST_REQUEST_TIME[symbol]
+        if time_since_last < MIN_REQUEST_INTERVAL:
+            time.sleep(MIN_REQUEST_INTERVAL - time_since_last)
+    
+    for attempt in range(max_retries):
+        try:
+            # Add random delay to avoid burst requests
+            if attempt > 0:
+                delay = random.uniform(1, 3) * (attempt + 1)
+                print(f"Retry {attempt + 1} for {symbol} after {delay:.2f}s delay")
+                time.sleep(delay)
+            
+            LAST_REQUEST_TIME[symbol] = time.time()
+            
+            # Simple approach: just use period which works more reliably
+            print(f"Downloading {symbol} with period='3mo'")
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="3mo")
+            
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+            
+            if df.empty:
+                print(f"No data returned for {symbol}")
+                return None
+            
+            # Ensure required columns exist
+            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                print(f"Missing columns for {symbol}: {missing_cols}")
+                return None
+            
+            print(f"Successfully downloaded {len(df)} rows for {symbol}")
+            return df
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"Error downloading {symbol} (attempt {attempt + 1}): {type(e).__name__}: {e}")
+            print(f"Full traceback: {traceback.format_exc()}")
+            
+            if '429' in error_msg or 'too many requests' in error_msg:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"Rate limited on {symbol}, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Max retries reached for {symbol} due to rate limiting")
+                    return None
+            else:
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                return None
+    
+    return None
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
@@ -11,12 +76,19 @@ from typing import Optional, List
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
+import time
+import random
+import os
 
+# CRITICAL: Set timezone environment variable BEFORE importing yfinance
+os.environ['TZ'] = 'America/New_York'
+if hasattr(time, 'tzset'):
+    time.tzset()
 
 app = FastAPI(title="Stock Analysis & Backtest API", version="1.0.0")
 
-# Thread pool for parallel processing
-executor = ThreadPoolExecutor(max_workers=10)
+# Thread pool for parallel processing - REDUCED for rate limiting
+executor = ThreadPoolExecutor(max_workers=3)
 
 # Add CORS middleware for Flutter app
 app.add_middleware(
@@ -27,7 +99,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models
+# Rate limiting globals
+LAST_REQUEST_TIME = {}
+MIN_REQUEST_INTERVAL = 0.5  # 500ms between requests per symbol
+
+# Pydantic models (keeping your existing models)
 class StockSuggestion(BaseModel):
     symbol: str
     company_name: str
@@ -47,17 +123,14 @@ class PortfolioStrategyInput(BaseModel):
     end_date: str = Field(..., description="End date in YYYY-MM-DD format")
     strategy: str = Field(default="RSI", description="Strategy type: RSI, MACD, or Volume_Spike")
     
-    # RSI parameters
     rsi_period: int = Field(default=14, ge=5, le=50)
     rsi_buy: int = Field(default=30, ge=0, le=100)
     rsi_sell: int = Field(default=70, ge=0, le=100)
     
-    # MACD parameters
     macd_fast: int = Field(default=12, ge=5, le=50)
     macd_slow: int = Field(default=26, ge=10, le=100)
     macd_signal: int = Field(default=9, ge=5, le=30)
     
-    # Volume Spike parameters
     volume_multiplier: float = Field(default=2.0, ge=1.0, le=10.0)
     volume_period: int = Field(default=20, ge=5, le=100)
     volume_hold_days: int = Field(default=5, ge=1, le=30)
@@ -112,11 +185,9 @@ class StockInfo(BaseModel):
     analyst_hold: int
     analyst_sell: int
     target_price: float
-    # New fields for frontend compatibility
     roe: float = 0.0
     debt_to_equity: float = 0.0
     pb_ratio: float = 0.0
-    # Shareholding pattern fields
     promoter_holding: float = 0.0
     public_holding: float = 0.0
     institutional_holding: float = 0.0
@@ -154,77 +225,195 @@ POPULAR_STOCKS = {
     'INTC': 'Intel Corporation', 'AMD': 'Advanced Micro Devices Inc.', 'IBM': 'International Business Machines Corporation',
     'JPM': 'JPMorgan Chase & Co.', 'BAC': 'Bank of America Corporation', 'WFC': 'Wells Fargo & Company',
     'GS': 'The Goldman Sachs Group Inc.', 'MS': 'Morgan Stanley', 'C': 'Citigroup Inc.',
-    'BRK.A': 'Berkshire Hathaway Inc. Class A', 'BRK.B': 'Berkshire Hathaway Inc. Class B',
     'V': 'Visa Inc.', 'MA': 'Mastercard Incorporated', 'PYPL': 'PayPal Holdings Inc.',
-    'AXP': 'American Express Company', 'JNJ': 'Johnson & Johnson', 'PFE': 'Pfizer Inc.',
-    'UNH': 'UnitedHealth Group Incorporated', 'ABBV': 'AbbVie Inc.', 'TMO': 'Thermo Fisher Scientific Inc.',
-    'ABT': 'Abbott Laboratories', 'DHR': 'Danaher Corporation', 'BMY': 'Bristol-Myers Squibb Company',
-    'LLY': 'Eli Lilly and Company', 'MRK': 'Merck & Co. Inc.', 'WMT': 'Walmart Inc.',
-    'PG': 'The Procter & Gamble Company', 'KO': 'The Coca-Cola Company', 'PEP': 'PepsiCo Inc.',
-    'NKE': 'NIKE Inc.', 'MCD': "McDonald's Corporation", 'SBUX': 'Starbucks Corporation',
-    'HD': 'The Home Depot Inc.', 'TGT': 'Target Corporation', 'COST': 'Costco Wholesale Corporation',
-    'XOM': 'Exxon Mobil Corporation', 'CVX': 'Chevron Corporation', 'COP': 'ConocoPhillips',
-    'SLB': 'Schlumberger Limited', 'EOG': 'EOG Resources Inc.', 'BA': 'The Boeing Company',
-    'GE': 'General Electric Company', 'CAT': 'Caterpillar Inc.', 'MMM': '3M Company',
-    'HON': 'Honeywell International Inc.', 'VZ': 'Verizon Communications Inc.', 'T': 'AT&T Inc.',
-    'TMUS': 'T-Mobile US Inc.', 'AMT': 'American Tower Corporation', 'PLD': 'Prologis Inc.',
-    'CCI': 'Crown Castle International Corp.',
-    # Indian Companies - NSE
-    'RELIANCE.NS': 'Reliance Industries Limited',
-    'TCS.NS': 'Tata Consultancy Services Limited',
-    'HDFCBANK.NS': 'HDFC Bank Limited',
-    'INFY.NS': 'Infosys Limited',
-    'ICICIBANK.NS': 'ICICI Bank Limited',
-    'HINDUNILVR.NS': 'Hindustan Unilever Limited',
-    'SBIN.NS': 'State Bank of India',
-    'BHARTIARTL.NS': 'Bharti Airtel Limited',
-    'ITC.NS': 'ITC Limited',
-    'KOTAKBANK.NS': 'Kotak Mahindra Bank Limited',
-    'LT.NS': 'Larsen & Toubro Limited',
-    'AXISBANK.NS': 'Axis Bank Limited',
-    'BAJFINANCE.NS': 'Bajaj Finance Limited',
-    'ASIANPAINT.NS': 'Asian Paints Limited',
-    'MARUTI.NS': 'Maruti Suzuki India Limited',
-    'TITAN.NS': 'Titan Company Limited',
-    'WIPRO.NS': 'Wipro Limited',
-    'HCLTECH.NS': 'HCL Technologies Limited',
-    'TECHM.NS': 'Tech Mahindra Limited',
-    'ULTRACEMCO.NS': 'UltraTech Cement Limited',
-    'SUNPHARMA.NS': 'Sun Pharmaceutical Industries Limited',
-    'NESTLEIND.NS': 'Nestle India Limited',
-    'POWERGRID.NS': 'Power Grid Corporation of India Limited',
-    'NTPC.NS': 'NTPC Limited',
-    'ONGC.NS': 'Oil and Natural Gas Corporation Limited',
-    'TATAMOTORS.NS': 'Tata Motors Limited',
-    'TATASTEEL.NS': 'Tata Steel Limited',
-    'ADANIENT.NS': 'Adani Enterprises Limited',
-    'ADANIPORTS.NS': 'Adani Ports and Special Economic Zone Limited',
-    'JSWSTEEL.NS': 'JSW Steel Limited',
-    'COALINDIA.NS': 'Coal India Limited',
-    'INDUSINDBK.NS': 'IndusInd Bank Limited',
-    'BAJAJFINSV.NS': 'Bajaj Finserv Limited',
-    'HINDALCO.NS': 'Hindalco Industries Limited',
-    'GRASIM.NS': 'Grasim Industries Limited',
-    'HEROMOTOCO.NS': 'Hero MotoCorp Limited',
-    'EICHERMOT.NS': 'Eicher Motors Limited',
-    'DIVISLAB.NS': "Divi's Laboratories Limited",
-    'DRREDDY.NS': "Dr. Reddy's Laboratories Limited",
-    'CIPLA.NS': 'Cipla Limited',
-    'BRITANNIA.NS': 'Britannia Industries Limited',
-    'APOLLOHOSP.NS': 'Apollo Hospitals Enterprise Limited',
-    'BPCL.NS': 'Bharat Petroleum Corporation Limited',
-    'IOC.NS': 'Indian Oil Corporation Limited',
-    'GAIL.NS': 'GAIL (India) Limited',
-    'SHREECEM.NS': 'Shree Cement Limited',
-    'VEDL.NS': 'Vedanta Limited',
-    'TATACONSUM.NS': 'Tata Consumer Products Limited',
-    'M&M.NS': 'Mahindra & Mahindra Limited',
+    'JNJ': 'Johnson & Johnson', 'PFE': 'Pfizer Inc.',
+    'WMT': 'Walmart Inc.', 'PG': 'The Procter & Gamble Company', 'KO': 'The Coca-Cola Company',
 }
+
+# ==================== RATE LIMITED DOWNLOAD ====================
+
+def rate_limited_download(symbol: str, start, end, max_retries=3):
+    """Download stock data with rate limiting and retry logic"""
+    global LAST_REQUEST_TIME
+    
+    # Rate limiting
+    current_time = time.time()
+    if symbol in LAST_REQUEST_TIME:
+        time_since_last = current_time - LAST_REQUEST_TIME[symbol]
+        if time_since_last < MIN_REQUEST_INTERVAL:
+            time.sleep(MIN_REQUEST_INTERVAL - time_since_last)
+    
+    for attempt in range(max_retries):
+        try:
+            # Add random delay to avoid burst requests
+            if attempt > 0:
+                delay = random.uniform(1, 3) * (attempt + 1)
+                print(f"Retry {attempt + 1} for {symbol} after {delay:.2f}s delay")
+                time.sleep(delay)
+            
+            LAST_REQUEST_TIME[symbol] = time.time()
+            
+            # Try Ticker.history() first as it's more reliable
+            print(f"Attempting to download {symbol} using Ticker.history()")
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(start=start, end=end)
+            
+            # If that fails or returns empty, try standard download
+            if df.empty:
+                print(f"Ticker.history() returned empty for {symbol}, trying yf.download()")
+                df = yf.download(
+                    symbol, 
+                    start=start, 
+                    end=end, 
+                    progress=False,
+                    timeout=10
+                )
+            
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+            
+            if df.empty:
+                print(f"No data returned for {symbol}")
+                return None
+            
+            # Ensure required columns exist
+            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                print(f"Missing columns for {symbol}: {missing_cols}")
+                return None
+            
+            print(f"Successfully downloaded {len(df)} rows for {symbol}")
+            return df
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"Error downloading {symbol} (attempt {attempt + 1}): {e}")
+            
+            if '429' in error_msg or 'too many requests' in error_msg:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5  # Exponential backoff
+                    print(f"Rate limited on {symbol}, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Max retries reached for {symbol} due to rate limiting")
+                    return None
+            elif 'delisted' in error_msg or 'timezone' in error_msg or 'yftz' in error_msg:
+                # These are known yfinance issues
+                print(f"Known yfinance issue for {symbol}: {error_msg}")
+                if attempt < max_retries - 1:
+                    # Try once more with increased delay
+                    time.sleep(2)
+                    continue
+                return None
+            else:
+                if attempt < max_retries - 1:
+                    continue
+                return None
+    
+    return None
+
+def rate_limited_ticker_info(symbol: str, max_retries=3):
+    """Get ticker info with rate limiting and retry logic"""
+    global LAST_REQUEST_TIME
+    
+    # Rate limiting
+    current_time = time.time()
+    if symbol in LAST_REQUEST_TIME:
+        time_since_last = current_time - LAST_REQUEST_TIME[symbol]
+        if time_since_last < MIN_REQUEST_INTERVAL:
+            time.sleep(MIN_REQUEST_INTERVAL - time_since_last)
+    
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                delay = random.uniform(1, 3) * (attempt + 1)
+                print(f"Retry {attempt + 1} for {symbol} info after {delay:.2f}s delay")
+                time.sleep(delay)
+            
+            LAST_REQUEST_TIME[symbol] = time.time()
+            
+            ticker = yf.Ticker(symbol)
+            
+            # Try to get info with error handling
+            try:
+                info = ticker.info
+            except Exception as info_error:
+                error_str = str(info_error).lower()
+                if 'expecting value' in error_str or 'json' in error_str:
+                    print(f"JSON decode error for {symbol}, trying fast_info...")
+                    # Try fast_info as fallback
+                    try:
+                        fast_info = ticker.fast_info
+                        # Convert fast_info to dict-like structure
+                        info = {
+                            'symbol': symbol,
+                            'longName': f"{symbol} Corporation",
+                            'sector': 'Technology',
+                            'marketCap': getattr(fast_info, 'market_cap', 0),
+                            'previousClose': getattr(fast_info, 'previous_close', 0),
+                        }
+                    except:
+                        print(f"fast_info also failed for {symbol}, returning minimal info")
+                        info = {
+                            'symbol': symbol,
+                            'longName': f"{symbol} Corporation",
+                            'sector': 'Technology',
+                        }
+                else:
+                    raise info_error
+            
+            # Check if we got valid info
+            if not info or len(info) < 2:
+                print(f"Invalid or empty info returned for {symbol}")
+                if attempt < max_retries - 1:
+                    continue
+                # Return minimal info instead of empty dict
+                return {
+                    'symbol': symbol,
+                    'longName': f"{symbol} Corporation",
+                    'sector': 'Technology',
+                }
+            
+            return info
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"Error getting info for {symbol} (attempt {attempt + 1}): {e}")
+            
+            if '429' in error_msg or 'too many requests' in error_msg:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"Rate limited on {symbol} info, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Max retries reached for {symbol} info due to rate limiting")
+                    return {
+                        'symbol': symbol,
+                        'longName': f"{symbol} Corporation",
+                        'sector': 'Technology',
+                    }
+            else:
+                if attempt < max_retries - 1:
+                    continue
+                # Return minimal info on final failure
+                return {
+                    'symbol': symbol,
+                    'longName': f"{symbol} Corporation",
+                    'sector': 'Technology',
+                }
+    
+    return {
+        'symbol': symbol,
+        'longName': f"{symbol} Corporation",
+        'sector': 'Technology',
+    }
 
 
 # ==================== STRATEGY CLASSES ====================
-# (Keep all your existing strategy classes: RSIStrategy, MACDStrategy, VolumeSpikeStrategy,
-#  PortfolioRSIStrategy, PortfolioMACDStrategy, PortfolioVolumeSpikeStrategy)
+# (Keep all your existing strategy classes unchanged)
 
 class RSIStrategy(bt.Strategy):
     params = (
@@ -325,6 +514,7 @@ class VolumeSpikeStrategy(bt.Strategy):
                 self.losing_trades += 1
 
 
+# Portfolio strategies (keeping your existing classes)
 class PortfolioRSIStrategy(bt.Strategy):
     params = (
         ("rsi_period", 14),
@@ -689,132 +879,64 @@ def calculate_vwap(df):
         return df['Close'].iloc[-1] if len(df) > 0 else 0.0
 
 
-# ==================== OPTIMIZED CACHING FUNCTIONS ====================
-
-@lru_cache(maxsize=200)
-def get_cached_stock_data(symbol: str, cache_key: str):
-    """Cache stock data - cache_key changes every 5 minutes for fresh data"""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=30)
-    
-    try:
-        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-        return df if not df.empty else None
-    except Exception as e:
-        print(f"Error downloading {symbol}: {e}")
-        return None
-
-@lru_cache(maxsize=200)
-def get_cached_ticker_info(symbol: str, cache_key: str):
-    """Cache ticker info - cache_key changes every 5 minutes"""
-    try:
-        ticker = yf.Ticker(symbol)
-        return ticker.info
-    except Exception as e:
-        print(f"Error getting info for {symbol}: {e}")
-        return {}
-
-def get_cache_key():
-    """Generate cache key that changes every 5 minutes"""
-    return datetime.now().strftime('%Y%m%d%H%M')[:-1] + '0'
-
-
-# ==================== OPTIMIZED STOCK SCREENING ====================
-
-def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
-    """Process a single stock with all filters - optimized with fail-fast approach"""
-    try:
-        cache_key = get_cache_key()
-        
-        df = get_cached_stock_data(symbol, cache_key)
-        if df is None or df.empty or len(df) < 2:
-            return None
-        
-        current_price = float(df['Close'].iloc[-1])
-        volume = int(df['Volume'].iloc[-1])
-        
-        if params['use_price']:
-            if current_price < params['price_min'] or current_price > params['price_max']:
-                return None
-        
-        if params['use_volume']:
-            if volume < params['volume_min']:
-                return None
-        
-        ticker_info = get_cached_ticker_info(symbol, cache_key)
-        market_cap = ticker_info.get('marketCap', 0)
-        pe_ratio = ticker_info.get('trailingPE', 0) if ticker_info.get('trailingPE') else 0
-        sector = ticker_info.get('sector', 'Unknown')
-        company_name = ticker_info.get('longName', f"{symbol} Corporation")
-        
-        if params['sector'] != 'any' and sector != params['sector']:
-            return None
-        
-        if params['use_market_cap']:
-            if market_cap < params['market_cap_min'] or market_cap > params['market_cap_max']:
-                return None
-        
-        if params['use_pe']:
-            if pe_ratio <= 0 or pe_ratio < params['pe_min'] or pe_ratio > params['pe_max']:
-                return None
-        
-        rsi_value = 50.0
-        if params['use_rsi']:
-            rsi_value = calculate_rsi(df['Close'].values, window=14)
-            if rsi_value < params['rsi_min'] or rsi_value > params['rsi_max']:
-                return None
-        
-        macd_value = 0.0
-        if params['use_macd']:
-            macd_value = calculate_macd(df['Close'].values)
-            if params['macd_signal'] == 'bullish' and macd_value <= 0:
-                return None
-            elif params['macd_signal'] == 'bearish' and macd_value >= 0:
-                return None
-        
-        vwap_value = 0.0
-        if params['use_vwap']:
-            vwap_value = calculate_vwap(df)
-            if params['vwap_position'] == 'above' and current_price <= vwap_value:
-                return None
-            elif params['vwap_position'] == 'below' and current_price >= vwap_value:
-                return None
-        
-        previous_close = df['Close'].iloc[-2]
-        change = current_price - previous_close
-        change_percent = (change / previous_close) * 100
-        
-        return {
-            'symbol': symbol,
-            'company_name': company_name,
-            'sector': sector,
-            'current_price': round(current_price, 2),
-            'change': round(change, 2),
-            'change_percent': round(change_percent, 2),
-            'volume': volume,
-            'market_cap': market_cap,
-            'pe_ratio': round(pe_ratio, 2) if pe_ratio > 0 else 0.0,
-            'rsi': round(rsi_value, 2),
-            'macd': round(macd_value, 2),
-            'vwap': round(vwap_value, 2) if params['use_vwap'] else 0.0,
-        }
-        
-    except Exception as e:
-        print(f"Error processing {symbol}: {str(e)}")
-        return None
-
-
 # ==================== API ENDPOINTS ====================
 
 @app.get("/")
 def read_root():
-    return {"message": "Stock Analysis & Backtest API is running"}
+    return {"message": "Stock Analysis & Backtest API is running with rate limiting"}
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/debug/yfinance-test")
+def test_yfinance():
+    """Test endpoint to diagnose Yahoo Finance API issues"""
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "yfinance_version": yf.__version__,
+        "tests": []
+    }
+    
+    # Test a simple ticker
+    test_symbol = "AAPL"
+    try:
+        ticker = yf.Ticker(test_symbol)
+        df = ticker.history(period="5d")
+        
+        results["tests"].append({
+            "method": "Ticker.history()",
+            "symbol": test_symbol,
+            "status": "success" if not df.empty else "empty_data",
+            "rows": len(df),
+            "columns": list(df.columns) if not df.empty else []
+        })
+    except Exception as e:
+        results["tests"].append({
+            "method": "Ticker.history()",
+            "symbol": test_symbol,
+            "status": "error",
+            "error": str(e)
+        })
+    
+    try:
+        df = yf.download(test_symbol, period="5d", progress=False)
+        results["tests"].append({
+            "method": "yf.download()",
+            "symbol": test_symbol,
+            "status": "success" if not df.empty else "empty_data",
+            "rows": len(df),
+            "columns": list(df.columns) if not df.empty else []
+        })
+    except Exception as e:
+        results["tests"].append({
+            "method": "yf.download()",
+            "symbol": test_symbol,
+            "status": "error",
+            "error": str(e)
+        })
+    
+    return results
 
 @app.get("/stock-suggestions", response_model=List[StockSuggestion])
 def get_stock_suggestions(q: str = Query(..., min_length=1)):
@@ -832,16 +954,24 @@ def get_stock_info(symbol: str):
         end_date = datetime.now()
         start_date = end_date - timedelta(days=90)
         
-        stock = yf.Ticker(symbol)
-        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
+        print(f"Fetching stock info for: {symbol}")
+        df = rate_limited_download(symbol, start_date, end_date)
         
-        if df.empty:
-            raise HTTPException(status_code=404, detail=f"Stock symbol '{symbol}' not found")
+        if df is None or df.empty:
+            # Check if this might be a Yahoo Finance API issue
+            error_detail = (
+                f"Unable to fetch data for '{symbol}'. This could be due to:\n"
+                f"1. Invalid ticker symbol\n"
+                f"2. Yahoo Finance API issues (common with timezone errors)\n"
+                f"3. The stock may be delisted\n\n"
+                f"Try:\n"
+                f"- Using a different ticker symbol\n"
+                f"- Waiting a few minutes if Yahoo Finance is having issues\n"
+                f"- Checking if the symbol is correct (e.g., use 'AAPL' not 'APPLE')"
+            )
+            raise HTTPException(status_code=404, detail=error_detail)
         
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-        
-        info = stock.info
+        info = rate_limited_ticker_info(symbol)
         current_price = df['Close'].iloc[-1]
         previous_close = df['Close'].iloc[-2] if len(df) > 1 else current_price
         change = current_price - previous_close
@@ -852,10 +982,41 @@ def get_stock_info(symbol: str):
         tech_indicators = calculate_technical_indicators(df)
         sentiment_data = generate_sentiment_data(symbol, current_price, change_percent)
         
-        # Calculate additional financial metrics
-        roe = float(info.get('returnOnEquity', 0) * 100) if info.get('returnOnEquity') else 0.0
-        debt_to_equity = float(info.get('debtToEquity', 0) / 100) if info.get('debtToEquity') else 0.0
-        pb_ratio = float(info.get('priceToBook', 0)) if info.get('priceToBook') else 0.0
+        # Safely extract info with fallbacks
+        roe = 0.0
+        if info.get('returnOnEquity'):
+            try:
+                roe = float(info.get('returnOnEquity', 0) * 100)
+            except:
+                roe = 0.0
+        
+        debt_to_equity = 0.0
+        if info.get('debtToEquity'):
+            try:
+                debt_to_equity = float(info.get('debtToEquity', 0) / 100)
+            except:
+                debt_to_equity = 0.0
+        
+        pb_ratio = 0.0
+        if info.get('priceToBook'):
+            try:
+                pb_ratio = float(info.get('priceToBook', 0))
+            except:
+                pb_ratio = 0.0
+        
+        pe_ratio = 0.0
+        if info.get('trailingPE'):
+            try:
+                pe_ratio = float(info.get('trailingPE', 0))
+            except:
+                pe_ratio = 0.0
+        
+        market_cap = 0.0
+        if info.get('marketCap'):
+            try:
+                market_cap = float(info.get('marketCap', 0))
+            except:
+                market_cap = 0.0
         
         return StockInfo(
             symbol=symbol,
@@ -865,8 +1026,8 @@ def get_stock_info(symbol: str):
             change=float(change),
             change_percent=float(change_percent),
             volume=int(df['Volume'].iloc[-1]),
-            market_cap=float(info.get('marketCap', 0)),
-            pe_ratio=float(info.get('trailingPE', 0)) if info.get('trailingPE') else 0.0,
+            market_cap=market_cap,
+            pe_ratio=pe_ratio,
             support_level=float(support),
             resistance_level=float(resistance),
             rsi=tech_indicators['rsi'],
@@ -946,10 +1107,8 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         stock_data = {}
         for stock in data.stocks:
             try:
-                df = yf.download(stock.ticker, start=data.start_date, end=data.end_date, progress=False)
-                
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+                print(f"Downloading data for {stock.ticker}")
+                df = rate_limited_download(stock.ticker, data.start_date, data.end_date)
                 
                 if df is None or df.empty:
                     raise HTTPException(status_code=404, detail=f"No data found for {stock.ticker}")
@@ -1049,11 +1208,96 @@ def run_portfolio_backtest(data: PortfolioStrategyInput):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
+    """Process a single stock with all filters - WITH RATE LIMITING"""
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        
+        df = rate_limited_download(symbol, start_date, end_date)
+        if df is None or df.empty or len(df) < 2:
+            return None
+        
+        current_price = float(df['Close'].iloc[-1])
+        volume = int(df['Volume'].iloc[-1])
+        
+        if params['use_price']:
+            if current_price < params['price_min'] or current_price > params['price_max']:
+                return None
+        
+        if params['use_volume']:
+            if volume < params['volume_min']:
+                return None
+        
+        ticker_info = rate_limited_ticker_info(symbol)
+        market_cap = ticker_info.get('marketCap', 0)
+        pe_ratio = ticker_info.get('trailingPE', 0) if ticker_info.get('trailingPE') else 0
+        sector = ticker_info.get('sector', 'Unknown')
+        company_name = ticker_info.get('longName', f"{symbol} Corporation")
+        
+        if params['sector'] != 'any' and sector != params['sector']:
+            return None
+        
+        if params['use_market_cap']:
+            if market_cap < params['market_cap_min'] or market_cap > params['market_cap_max']:
+                return None
+        
+        if params['use_pe']:
+            if pe_ratio <= 0 or pe_ratio < params['pe_min'] or pe_ratio > params['pe_max']:
+                return None
+        
+        rsi_value = 50.0
+        if params['use_rsi']:
+            rsi_value = calculate_rsi(df['Close'].values, window=14)
+            if rsi_value < params['rsi_min'] or rsi_value > params['rsi_max']:
+                return None
+        
+        macd_value = 0.0
+        if params['use_macd']:
+            macd_value = calculate_macd(df['Close'].values)
+            if params['macd_signal'] == 'bullish' and macd_value <= 0:
+                return None
+            elif params['macd_signal'] == 'bearish' and macd_value >= 0:
+                return None
+        
+        vwap_value = 0.0
+        if params['use_vwap']:
+            vwap_value = calculate_vwap(df)
+            if params['vwap_position'] == 'above' and current_price <= vwap_value:
+                return None
+            elif params['vwap_position'] == 'below' and current_price >= vwap_value:
+                return None
+        
+        previous_close = df['Close'].iloc[-2]
+        change = current_price - previous_close
+        change_percent = (change / previous_close) * 100
+        
+        return {
+            'symbol': symbol,
+            'company_name': company_name,
+            'sector': sector,
+            'current_price': round(current_price, 2),
+            'change': round(change, 2),
+            'change_percent': round(change_percent, 2),
+            'volume': volume,
+            'market_cap': market_cap,
+            'pe_ratio': round(pe_ratio, 2) if pe_ratio > 0 else 0.0,
+            'rsi': round(rsi_value, 2),
+            'macd': round(macd_value, 2),
+            'vwap': round(vwap_value, 2) if params['use_vwap'] else 0.0,
+        }
+        
+    except Exception as e:
+        print(f"Error processing {symbol}: {str(e)}")
+        return None
+
+
 @app.post("/screen-stocks")
 async def screen_stocks(params: StockScreenerParams):
-    """Optimized stock screener with parallel processing"""
+    """Stock screener with SEQUENTIAL processing to avoid rate limiting"""
     try:
-        stock_symbols = list(POPULAR_STOCKS.keys())
+        # Use a smaller subset of stocks to avoid rate limits
+        stock_symbols = list(POPULAR_STOCKS.keys())[:30]  # Limit to 30 stocks
         
         params_dict = {
             'use_rsi': params.use_rsi,
@@ -1077,20 +1321,15 @@ async def screen_stocks(params: StockScreenerParams):
             'sector': params.sector,
         }
         
-        loop = asyncio.get_event_loop()
+        # Process stocks SEQUENTIALLY to avoid rate limiting
+        results = []
+        for symbol in stock_symbols:
+            result = process_single_stock(symbol, params_dict)
+            if result is not None:
+                results.append(result)
+            # Small delay between requests
+            await asyncio.sleep(0.2)
         
-        async def process_stock_async(symbol):
-            return await loop.run_in_executor(
-                executor,
-                process_single_stock,
-                symbol,
-                params_dict
-            )
-        
-        results_futures = [process_stock_async(symbol) for symbol in stock_symbols]
-        all_results = await asyncio.gather(*results_futures)
-        
-        results = [r for r in all_results if r is not None]
         results.sort(key=lambda x: x['symbol'])
         
         return results
@@ -1103,10 +1342,10 @@ async def screen_stocks(params: StockScreenerParams):
 
 @app.post("/clear-cache")
 def clear_screening_cache():
-    """Clear the stock data cache"""
-    get_cached_stock_data.cache_clear()
-    get_cached_ticker_info.cache_clear()
-    return {"message": "Cache cleared successfully", "timestamp": datetime.now().isoformat()}
+    """Clear rate limiting history"""
+    global LAST_REQUEST_TIME
+    LAST_REQUEST_TIME = {}
+    return {"message": "Rate limit cache cleared", "timestamp": datetime.now().isoformat()}
 
 
 if __name__ == "__main__":
