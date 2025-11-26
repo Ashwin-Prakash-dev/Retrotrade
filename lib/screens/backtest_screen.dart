@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:ui';
 import '../services/api_service.dart';
 import '../widgets/backtest_results_card.dart';
 
@@ -17,40 +16,47 @@ class _BacktestScreenState extends State<BacktestScreen> {
   final _apiService = ApiService();
   final _formKey = GlobalKey<FormState>();
   
-  // Glassmorphic color scheme
-  static const Color primaryBg = Color(0xFF000000);
-  static const Color glassColor = Color(0x1AFFFFFF);
-  static const Color glassBorder = Color(0x33FFFFFF);
+  // Colors matching home screen
+  static const Color primaryBg = Color(0xFF0A0E27);
+  static const Color secondaryBg = Color(0xFF121836);
+  static const Color cardBg = Color(0xFF1A2138);
   static const Color accentCyan = Color(0xFF00F5FF);
   static const Color accentPurple = Color(0xFF8B5CF6);
   static const Color accentGreen = Color(0xFF00FF88);
   static const Color accentRed = Color(0xFFFF0055);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textPrimary = Color(0xFFE2E8F0);
+  static const Color textSecondary = Color(0xFF94A3B8);
   
+  // Strategy selection
   String _selectedStrategy = 'RSI';
   
+  // RSI Controllers
   final _rsiPeriodController = TextEditingController(text: '14');
   final _rsiBuyController = TextEditingController(text: '30');
   final _rsiSellController = TextEditingController(text: '70');
   
+  // MACD Controllers
   final _macdFastController = TextEditingController(text: '12');
   final _macdSlowController = TextEditingController(text: '26');
   final _macdSignalController = TextEditingController(text: '9');
   
+  // Volume Spike Controllers
   final _volumeMultiplierController = TextEditingController(text: '2.0');
   final _volumePeriodController = TextEditingController(text: '20');
   final _volumeHoldDaysController = TextEditingController(text: '5');
   
   final _initialCashController = TextEditingController(text: '100000');
   
+  // State
   bool _isLoading = false;
   Map<String, dynamic>? _results;
   String? _error;
   
+  // Date range
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 365));
   DateTime _endDate = DateTime.now();
   
+  // Portfolio stocks
   List<PortfolioStockInput> _portfolioStocks = [];
   bool _rebalance = false;
   String _rebalanceFrequency = 'monthly';
@@ -78,7 +84,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
             colorScheme: const ColorScheme.dark(
               primary: accentCyan,
               onPrimary: Colors.black,
-              surface: Color(0xFF1A1A1A),
+              surface: cardBg,
               onSurface: textPrimary,
             ),
           ),
@@ -130,6 +136,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
         throw 'Portfolio allocations must sum to 100% (current: ${totalAllocation.toStringAsFixed(1)}%)';
       }
       
+      // Build strategy parameters based on selected strategy
       final Map<String, dynamic> strategyParams = {
         'strategy': _selectedStrategy,
       };
@@ -205,89 +212,74 @@ class _BacktestScreenState extends State<BacktestScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: primaryBg,
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
+                gradient: const LinearGradient(
+                  colors: [accentCyan, accentPurple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: accentCyan.withOpacity(0.5), width: 1),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentCyan.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
-              child: const Icon(Icons.analytics, color: accentCyan, size: 20),
+              child: const Icon(Icons.analytics, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
             const Text(
               'PORTFOLIO BACKTEST',
               style: TextStyle(
                 color: textPrimary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w300,
                 letterSpacing: 2,
-                fontSize: 14,
+                fontSize: 16,
               ),
             ),
           ],
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: secondaryBg,
         elevation: 0,
         iconTheme: const IconThemeData(color: accentCyan),
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    glassColor.withOpacity(0.8),
-                    glassColor.withOpacity(0.5),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border(
-                  bottom: BorderSide(color: glassBorder, width: 1),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topRight,
-            radius: 1.5,
-            colors: [
-              accentPurple.withOpacity(0.15),
-              primaryBg,
-              accentCyan.withOpacity(0.1),
-            ],
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [secondaryBg, primaryBg],
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 100, 16, 16),
+          padding: const EdgeInsets.all(16.0),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Portfolio Stocks Section
                 _buildSectionHeader('PORTFOLIO STOCKS', Icons.pie_chart),
                 const SizedBox(height: 12),
                 _buildPortfolioList(),
                 const SizedBox(height: 12),
-                _buildGlassButton(
+                _buildGradientButton(
                   onPressed: _addPortfolioStock,
                   icon: Icons.add,
                   label: 'Add Stock',
-                  color: accentCyan,
+                  gradientColors: [accentCyan, accentPurple],
                 ),
 
                 const SizedBox(height: 24),
 
+                // Date Range Section
                 _buildSectionHeader('DATE RANGE', Icons.calendar_today),
                 const SizedBox(height: 12),
                 Row(
@@ -312,19 +304,22 @@ class _BacktestScreenState extends State<BacktestScreen> {
 
                 const SizedBox(height: 24),
 
+                // Strategy Selection
                 _buildSectionHeader('TRADING STRATEGY', Icons.psychology),
                 const SizedBox(height: 12),
                 _buildStrategySelector(),
 
                 const SizedBox(height: 24),
 
+                // Strategy Parameters Section
                 _buildStrategyParameters(),
 
                 const SizedBox(height: 24),
 
+                // Initial Cash
                 _buildSectionHeader('INITIAL INVESTMENT', Icons.account_balance_wallet),
                 const SizedBox(height: 12),
-                _buildGlassCard(
+                _buildInputCard(
                   child: _buildNumberField(
                     controller: _initialCashController,
                     label: 'Initial Cash (\$)',
@@ -333,6 +328,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
                   ),
                 ),
 
+                // Portfolio Options
                 const SizedBox(height: 24),
                 _buildSectionHeader('PORTFOLIO OPTIONS', Icons.settings_suggest),
                 const SizedBox(height: 12),
@@ -340,19 +336,22 @@ class _BacktestScreenState extends State<BacktestScreen> {
 
                 const SizedBox(height: 32),
 
-                _buildGlassButton(
+                // Run Backtest Button
+                _buildGradientButton(
                   onPressed: _isLoading ? null : _runBacktest,
                   icon: _isLoading ? null : Icons.play_arrow,
                   label: _isLoading ? 'RUNNING BACKTEST...' : 'RUN PORTFOLIO BACKTEST',
-                  color: accentGreen,
+                  gradientColors: [accentGreen, const Color(0xFF00CC66)],
                   isLoading: _isLoading,
                   height: 56,
                 ),
 
                 const SizedBox(height: 24),
 
+                // Error Display
                 if (_error != null) _buildErrorCard(),
 
+                // Results Display
                 if (_results != null) ...[
                   BacktestResultsCard(results: _results!),
                   
@@ -380,7 +379,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: textSecondary,
             letterSpacing: 2,
@@ -392,7 +391,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
             height: 1,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [glassBorder, Colors.transparent],
+                colors: [accentCyan.withOpacity(0.3), Colors.transparent],
               ),
             ),
           ),
@@ -401,39 +400,19 @@ class _BacktestScreenState extends State<BacktestScreen> {
     );
   }
 
-  Widget _buildGlassCard({required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                glassColor.withOpacity(0.8),
-                glassColor.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: glassBorder,
-              width: 1,
-            ),
-          ),
-          padding: const EdgeInsets.all(16.0),
-          child: child,
-        ),
-      ),
-    );
-  }
-
   Widget _buildPortfolioList() {
     if (_portfolioStocks.isEmpty) {
-      return _buildGlassCard(
+      return Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accentCyan.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(32.0),
           child: Column(
             children: [
               Icon(Icons.pie_chart_outline, size: 48, color: textSecondary.withOpacity(0.5)),
@@ -457,155 +436,139 @@ class _BacktestScreenState extends State<BacktestScreen> {
       0, (sum, stock) => sum + stock.allocation
     );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                glassColor.withOpacity(0.8),
-                glassColor.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: glassBorder, width: 1),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'TOTAL ALLOCATION',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: textSecondary,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        Text(
-                          '${totalAllocation.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: (totalAllocation - 100.0).abs() < 0.01
-                                ? accentGreen
-                                : const Color(0xFFFFB84D),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(2),
+                    const Text(
+                      'TOTAL ALLOCATION',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary,
+                        letterSpacing: 1,
                       ),
-                      child: FractionallySizedBox(
-                        widthFactor: (totalAllocation / 100).clamp(0.0, 1.0),
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: (totalAllocation - 100.0).abs() < 0.01
-                                  ? [accentGreen, accentGreen]
-                                  : [const Color(0xFFFFB84D), const Color(0xFFFF9800)],
-                            ),
-                            borderRadius: BorderRadius.circular(2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (totalAllocation - 100.0).abs() < 0.01
-                                    ? accentGreen.withOpacity(0.5)
-                                    : const Color(0xFFFFB84D).withOpacity(0.5),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                        ),
+                    ),
+                    Text(
+                      '${totalAllocation.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: (totalAllocation - 100.0).abs() < 0.01
+                            ? accentGreen
+                            : const Color(0xFFFFB84D),
                       ),
                     ),
                   ],
                 ),
-              ),
-              Divider(height: 1, color: glassBorder),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _portfolioStocks.length,
-                separatorBuilder: (context, index) => Divider(height: 1, color: glassBorder),
-                itemBuilder: (context, index) {
-                  final stock = _portfolioStocks[index];
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: accentCyan.withOpacity(0.5)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              stock.ticker.substring(0, 1),
-                              style: const TextStyle(
-                                color: accentCyan,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: FractionallySizedBox(
+                    widthFactor: (totalAllocation / 100).clamp(0.0, 1.0),
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: (totalAllocation - 100.0).abs() < 0.01
+                              ? [accentGreen, accentGreen]
+                              : [const Color(0xFFFFB84D), const Color(0xFFFF9800)],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                stock.ticker,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: textPrimary,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                '${stock.allocation.toStringAsFixed(1)}% allocation',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: textSecondary.withOpacity(0.8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: accentRed),
-                          onPressed: () => _removePortfolioStock(index),
-                        ),
-                      ],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  );
-                },
-              ),
-            ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          Divider(height: 1, color: textSecondary.withOpacity(0.1)),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _portfolioStocks.length,
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              color: textSecondary.withOpacity(0.1),
+            ),
+            itemBuilder: (context, index) {
+              final stock = _portfolioStocks[index];
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          stock.ticker.substring(0, 1),
+                          style: const TextStyle(
+                            color: accentCyan,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stock.ticker,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: textPrimary,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${stock.allocation.toStringAsFixed(1)}% allocation',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textSecondary.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: accentRed),
+                      onPressed: () => _removePortfolioStock(index),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -614,84 +577,85 @@ class _BacktestScreenState extends State<BacktestScreen> {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  glassColor.withOpacity(0.8),
-                  glassColor.withOpacity(0.4),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accentCyan.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                color: textSecondary,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: glassBorder, width: 1),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  label.toUpperCase(),
+                  _formatDate(date),
                   style: const TextStyle(
-                    fontSize: 10,
-                    color: textSecondary,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
+                    color: textPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _formatDate(date),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimary,
-                      ),
-                    ),
-                    Icon(Icons.calendar_today, size: 16, color: accentCyan),
-                  ],
-                ),
+                Icon(Icons.calendar_today, size: 16, color: accentCyan),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildStrategySelector() {
-    return _buildGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'SELECT STRATEGY',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: textSecondary,
-              letterSpacing: 1,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SELECT STRATEGY',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: textSecondary,
+                letterSpacing: 1,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildStrategyButton('RSI', Icons.show_chart)),
-              const SizedBox(width: 8),
-              Expanded(child: _buildStrategyButton('MACD', Icons.trending_up)),
-              const SizedBox(width: 8),
-              Expanded(child: _buildStrategyButton('Volume_Spike', Icons.bar_chart)),
-            ],
-          ),
-        ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildStrategyButton('RSI', Icons.show_chart)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStrategyButton('MACD', Icons.trending_up)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStrategyButton('Volume_Spike', Icons.bar_chart)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -710,22 +674,14 @@ class _BacktestScreenState extends State<BacktestScreen> {
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
-                  colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
+                  colors: [accentCyan.withOpacity(0.2), accentPurple.withOpacity(0.2)],
                 )
               : null,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? accentCyan : glassBorder,
+            color: isSelected ? accentCyan : textSecondary.withOpacity(0.3),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: accentCyan.withOpacity(0.3),
-                    blurRadius: 12,
-                  ),
-                ]
-              : null,
         ),
         child: Column(
           children: [
@@ -751,36 +707,46 @@ class _BacktestScreenState extends State<BacktestScreen> {
   }
 
   Widget _buildStrategyParameters() {
-    return _buildGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: accentPurple.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: accentPurple.withOpacity(0.5)),
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentPurple.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: accentPurple.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.settings, size: 16, color: accentPurple),
                 ),
-                child: Icon(Icons.settings, size: 16, color: accentPurple),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${_selectedStrategy.replaceAll('_', ' ').toUpperCase()} PARAMETERS',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: textPrimary,
-                  letterSpacing: 1,
+                const SizedBox(width: 8),
+                Text(
+                  '${_selectedStrategy.replaceAll('_', ' ').toUpperCase()} PARAMETERS',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                    letterSpacing: 1,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildStrategySpecificFields(),
-        ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildStrategySpecificFields(),
+          ],
+        ),
       ),
     );
   }
@@ -827,7 +793,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
               decoration: BoxDecoration(
                 color: accentCyan.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: accentCyan.withOpacity(0.3)),
+                border: Border.all(color: accentCyan.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -885,7 +851,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
               decoration: BoxDecoration(
                 color: accentGreen.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: accentGreen.withOpacity(0.3)),
+                border: Border.all(color: accentGreen.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -944,7 +910,7 @@ class _BacktestScreenState extends State<BacktestScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFB84D).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFFB84D).withOpacity(0.3)),
+                border: Border.all(color: const Color(0xFFFFB84D).withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -967,6 +933,21 @@ class _BacktestScreenState extends State<BacktestScreen> {
     }
   }
 
+  Widget _buildInputCard({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(16.0),
+      child: child,
+    );
+  }
+
   Widget _buildNumberField({
     required TextEditingController controller,
     required String label,
@@ -980,16 +961,16 @@ class _BacktestScreenState extends State<BacktestScreen> {
       style: const TextStyle(color: textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: textSecondary),
+        labelStyle: TextStyle(color: textSecondary),
         hintText: hint,
         hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: glassBorder),
+          borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: glassBorder),
+          borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1024,208 +1005,172 @@ class _BacktestScreenState extends State<BacktestScreen> {
   }
 
   Widget _buildPortfolioOptions() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                glassColor.withOpacity(0.8),
-                glassColor.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: glassBorder, width: 1),
-          ),
-          child: Column(
-            children: [
-              Theme(
-                data: ThemeData.dark(),
-                child: SwitchListTile(
-                  title: const Text(
-                    'Enable Rebalancing',
-                    style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    'Periodically adjust portfolio allocations',
-                    style: TextStyle(color: textSecondary.withOpacity(0.8), fontSize: 12),
-                  ),
-                  value: _rebalance,
-                  activeColor: accentCyan,
-                  onChanged: (value) {
-                    setState(() {
-                      _rebalance = value;
-                    });
-                  },
-                ),
-              ),
-              if (_rebalance) ...[
-                Divider(height: 1, color: glassBorder),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'REBALANCE FREQUENCY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: textSecondary,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: accentCyan.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: accentCyan.withOpacity(0.3)),
-                        ),
-                        child: DropdownButton<String>(
-                          value: _rebalanceFrequency,
-                          dropdownColor: const Color(0xFF1A1A1A),
-                          underline: const SizedBox(),
-                          style: const TextStyle(color: accentCyan, fontWeight: FontWeight.w600),
-                          items: const [
-                            DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                            DropdownMenuItem(value: 'quarterly', child: Text('Quarterly')),
-                            DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _rebalanceFrequency = value;
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentPurple.withOpacity(0.2),
+          width: 1,
         ),
+      ),
+      child: Column(
+        children: [
+          Theme(
+            data: ThemeData.dark(),
+            child: SwitchListTile(
+              title: const Text(
+                'Enable Rebalancing',
+                style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                'Periodically adjust portfolio allocations',
+                style: TextStyle(color: textSecondary.withOpacity(0.8), fontSize: 12),
+              ),
+              value: _rebalance,
+              activeColor: accentCyan,
+              onChanged: (value) {
+                setState(() {
+                  _rebalance = value;
+                });
+              },
+            ),
+          ),
+          if (_rebalance) ...[
+            Divider(height: 1, color: textSecondary.withOpacity(0.1)),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'REBALANCE FREQUENCY',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: accentCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: accentCyan.withOpacity(0.3)),
+                    ),
+                    child: DropdownButton<String>(
+                      value: _rebalanceFrequency,
+                      dropdownColor: cardBg,
+                      underline: const SizedBox(),
+                      style: const TextStyle(color: accentCyan, fontWeight: FontWeight.w600),
+                      items: const [
+                        DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                        DropdownMenuItem(value: 'quarterly', child: Text('Quarterly')),
+                        DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _rebalanceFrequency = value;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildGlassButton({
+  Widget _buildGradientButton({
     required VoidCallback? onPressed,
     IconData? icon,
     required String label,
-    required Color color,
+    required List<Color> gradientColors,
     bool isLoading = false,
     double height = 48,
   }) {
     return InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            height: height,
-            decoration: BoxDecoration(
-              gradient: onPressed == null
-                  ? LinearGradient(
-                      colors: [
-                        Colors.grey.withOpacity(0.3),
-                        Colors.grey.withOpacity(0.2),
-                      ],
-                    )
-                  : LinearGradient(
-                      colors: [
-                        color.withOpacity(0.6),
-                        color.withOpacity(0.3),
-                      ],
-                    ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: onPressed == null ? glassBorder : color.withOpacity(0.5),
-                width: 1,
-              ),
-              boxShadow: onPressed != null
-                  ? [
-                      BoxShadow(
-                        color: color.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          gradient: onPressed == null
+              ? LinearGradient(colors: [Colors.grey.shade700, Colors.grey.shade800])
+              : LinearGradient(colors: gradientColors),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: onPressed != null
+              ? [
+                  BoxShadow(
+                    color: gradientColors[0].withOpacity(0.3),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: isLoading
+              ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Colors.white,
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, color: Colors.white),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
+                        letterSpacing: 1.5,
                       ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (icon != null) ...[
-                          Icon(icon, color: Colors.white),
-                          const SizedBox(width: 8),
-                        ],
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
                     ),
-            ),
-          ),
+                  ],
+                ),
         ),
       ),
     );
   }
 
   Widget _buildErrorCard() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: accentRed.withOpacity(0.2),
-            border: Border.all(color: accentRed.withOpacity(0.5)),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: accentRed),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(
-                      color: textPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: accentRed.withOpacity(0.1),
+        border: Border.all(color: accentRed.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: accentRed),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _error!,
+                style: TextStyle(
+                  color: accentRed,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1234,143 +1179,133 @@ class _BacktestScreenState extends State<BacktestScreen> {
   Widget _buildPortfolioPerformanceCard() {
     final performances = _results!['stock_performances'] as List<dynamic>;
     
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                glassColor.withOpacity(0.8),
-                glassColor.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: glassBorder, width: 1),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: accentCyan.withOpacity(0.5)),
-                      ),
-                      child: const Icon(Icons.analytics, color: accentCyan, size: 20),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'INDIVIDUAL STOCK PERFORMANCE',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: textPrimary,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.analytics, color: accentCyan, size: 20),
                 ),
-                const SizedBox(height: 16),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: performances.length,
-                  separatorBuilder: (context, index) => Divider(color: glassBorder),
-                  itemBuilder: (context, index) {
-                    final perf = performances[index] as Map<String, dynamic>;
-                    final ticker = perf['ticker'] as String;
-                    final trades = perf['trades'] as int;
-                    final winningTrades = perf['winning_trades'] as int;
-                    final allocation = perf['allocation'] as num;
-                    final winRate = trades > 0 ? (winningTrades / trades * 100) : 0.0;
-                    
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
+                const SizedBox(width: 12),
+                const Text(
+                  'INDIVIDUAL STOCK PERFORMANCE',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: performances.length,
+              separatorBuilder: (context, index) => Divider(
+                color: textSecondary.withOpacity(0.1),
+              ),
+              itemBuilder: (context, index) {
+                final perf = performances[index] as Map<String, dynamic>;
+                final ticker = perf['ticker'] as String;
+                final trades = perf['trades'] as int;
+                final winningTrades = perf['winning_trades'] as int;
+                final allocation = perf['allocation'] as num;
+                final winRate = trades > 0 ? (winningTrades / trades * 100) : 0.0;
+                
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [accentCyan.withOpacity(0.2), accentPurple.withOpacity(0.2)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            ticker.substring(0, 1),
+                            style: const TextStyle(
+                              color: accentCyan,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ticker,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: textPrimary,
+                              ),
+                            ),
+                            Text(
+                              '$trades trades • ${allocation.toStringAsFixed(1)}% allocation',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textSecondary.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [accentCyan.withOpacity(0.3), accentPurple.withOpacity(0.3)],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: accentCyan.withOpacity(0.5)),
-                            ),
-                            child: Center(
-                              child: Text(
-                                ticker.substring(0, 1),
-                                style: const TextStyle(
-                                  color: accentCyan,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 20,
-                                ),
-                              ),
+                          Text(
+                            '${winRate.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: winRate >= 50 ? accentGreen : accentRed,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  ticker,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: textPrimary,
-                                  ),
-                                ),
-                                Text(
-                                  '$trades trades • ${allocation.toStringAsFixed(1)}% allocation',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: textSecondary.withOpacity(0.8),
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            'win rate',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: textSecondary.withOpacity(0.8),
                             ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '${winRate.toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: winRate >= 50 ? accentGreen : accentRed,
-                                ),
-                              ),
-                              Text(
-                                'win rate',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: textSecondary.withOpacity(0.8),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1379,138 +1314,128 @@ class _BacktestScreenState extends State<BacktestScreen> {
   Widget _buildPortfolioCompositionCard() {
     final composition = _results!['portfolio_composition'] as List<dynamic>;
     
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                glassColor.withOpacity(0.8),
-                glassColor.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accentGreen.withOpacity(0.3), width: 1),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentGreen.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [accentGreen.withOpacity(0.3), const Color(0xFF00CC66).withOpacity(0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: accentGreen.withOpacity(0.5)),
-                      ),
-                      child: Icon(Icons.pie_chart, color: accentGreen, size: 20),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [accentGreen.withOpacity(0.3), const Color(0xFF00CC66).withOpacity(0.3)],
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'FINAL PORTFOLIO COMPOSITION',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: textPrimary,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.pie_chart, color: accentGreen, size: 20),
                 ),
-                const SizedBox(height: 16),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: composition.length,
-                  separatorBuilder: (context, index) => Divider(color: glassBorder),
-                  itemBuilder: (context, index) {
-                    final comp = composition[index];
-                    
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
+                const SizedBox(width: 12),
+                const Text(
+                  'FINAL PORTFOLIO COMPOSITION',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: composition.length,
+              separatorBuilder: (context, index) => Divider(
+                color: textSecondary.withOpacity(0.1),
+              ),
+              itemBuilder: (context, index) {
+                final comp = composition[index];
+                
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [accentGreen.withOpacity(0.2), const Color(0xFF00CC66).withOpacity(0.2)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            (comp['ticker'] as String).substring(0, 1),
+                            style: const TextStyle(
+                              color: accentGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              comp['ticker'],
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: textPrimary,
+                              ),
+                            ),
+                            Text(
+                              '${comp['position_size']} shares • ${comp['position_value'].toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textSecondary.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [accentGreen.withOpacity(0.3), const Color(0xFF00CC66).withOpacity(0.3)],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: accentGreen.withOpacity(0.5)),
-                            ),
-                            child: Center(
-                              child: Text(
-                                (comp['ticker'] as String).substring(0, 1),
-                                style: const TextStyle(
-                                  color: accentGreen,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 20,
-                                ),
-                              ),
+                          Text(
+                            '${(comp['actual_allocation'] as num).toStringAsFixed(1)}%',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: textPrimary,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  comp['ticker'],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: textPrimary,
-                                  ),
-                                ),
-                                Text(
-                                  '${comp['position_size']} shares • \${comp['position_value'].toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: textSecondary.withOpacity(0.8),
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            'target: ${(comp['target_allocation'] as num).toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: textSecondary.withOpacity(0.8),
                             ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '${(comp['actual_allocation'] as num).toStringAsFixed(1)}%',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: textPrimary,
-                                ),
-                              ),
-                              Text(
-                                'target: ${(comp['target_allocation'] as num).toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: textSecondary.withOpacity(0.8),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1542,6 +1467,7 @@ class PortfolioStockInput {
   });
 }
 
+// Updated dialog with autocomplete
 class _AddStockDialog extends StatefulWidget {
   final Function(String ticker, double allocation) onAdd;
 
@@ -1552,12 +1478,10 @@ class _AddStockDialog extends StatefulWidget {
 }
 
 class _AddStockDialogState extends State<_AddStockDialog> {
-  static const Color glassColor = Color(0x1AFFFFFF);
-  static const Color glassBorder = Color(0x33FFFFFF);
+  static const Color cardBg = Color(0xFF1A2138);
   static const Color accentCyan = Color(0xFF00F5FF);
-  static const Color accentPurple = Color(0xFF8B5CF6);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textPrimary = Color(0xFFE2E8F0);
+  static const Color textSecondary = Color(0xFF94A3B8);
   
   final _formKey = GlobalKey<FormState>();
   final _tickerController = TextEditingController();
@@ -1574,157 +1498,134 @@ class _AddStockDialogState extends State<_AddStockDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.transparent,
-      child: ClipRRect(
+      backgroundColor: cardBg,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 500),
-            padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  glassColor.withOpacity(0.9),
-                  glassColor.withOpacity(0.6),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        side: BorderSide(color: accentCyan.withOpacity(0.3)),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ADD STOCK TO PORTFOLIO',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: glassBorder, width: 1),
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 24),
+              
+              // Custom autocomplete field without search button
+              _StockAutocompleteField(
+                controller: _tickerController,
+                onStockSelected: _onStockSelected,
+              ),
+              
+              const SizedBox(height: 16),
+              
+              TextFormField(
+                controller: _allocationController,
+                style: const TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Allocation (%)',
+                  labelStyle: TextStyle(color: textSecondary),
+                  hintText: 'e.g., 25',
+                  hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: accentCyan, width: 2),
+                  ),
+                  suffixText: '%',
+                  suffixStyle: TextStyle(color: textSecondary),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter allocation';
+                  }
+                  final num = double.tryParse(value);
+                  if (num == null || num <= 0 || num > 100) {
+                    return 'Enter 0-100';
+                  }
+                  return null;
+                },
+              ),
+              
+              const SizedBox(height: 24),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text(
-                    'ADD STOCK TO PORTFOLIO',
-                    style: TextStyle(
-                      color: textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'CANCEL',
+                      style: TextStyle(color: textSecondary),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  
-                  _StockAutocompleteField(
-                    controller: _tickerController,
-                    onStockSelected: _onStockSelected,
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  TextFormField(
-                    controller: _allocationController,
-                    style: const TextStyle(color: textPrimary),
-                    decoration: InputDecoration(
-                      labelText: 'Allocation (%)',
-                      labelStyle: const TextStyle(color: textSecondary),
-                      hintText: 'e.g., 25',
-                      hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: glassBorder),
+                  const SizedBox(width: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [accentCyan, Color(0xFF8B5CF6)],
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: glassBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: accentCyan, width: 2),
-                      ),
-                      suffixText: '%',
-                      suffixStyle: const TextStyle(color: textSecondary),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter allocation';
-                      }
-                      final num = double.tryParse(value);
-                      if (num == null || num <= 0 || num > 100) {
-                        return 'Enter 0-100';
-                      }
-                      return null;
-                    },
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text(
-                          'CANCEL',
-                          style: TextStyle(color: textSecondary),
+                    child: TextButton(
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          final symbol = _selectedSymbol.isNotEmpty 
+                              ? _selectedSymbol 
+                              : _tickerController.text.split(' ').first.toUpperCase().trim();
+                          
+                          if (symbol.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a valid ticker symbol'),
+                                backgroundColor: Color(0xFFFF0055),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          widget.onAdd(
+                            symbol,
+                            double.parse(_allocationController.text),
+                          );
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text(
+                        'ADD',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  accentCyan.withOpacity(0.6),
-                                  accentPurple.withOpacity(0.6),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: accentCyan.withOpacity(0.5)),
-                            ),
-                            child: TextButton(
-                              onPressed: () {
-                                if (_formKey.currentState!.validate()) {
-                                  final symbol = _selectedSymbol.isNotEmpty 
-                                      ? _selectedSymbol 
-                                      : _tickerController.text.split(' ').first.toUpperCase().trim();
-                                  
-                                  if (symbol.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Please enter a valid ticker symbol'),
-                                        backgroundColor: Color(0xFFFF0055),
-                                      ),
-                                    );
-                                    return;
-                                  }
-                                  
-                                  widget.onAdd(
-                                    symbol,
-                                    double.parse(_allocationController.text),
-                                  );
-                                  Navigator.pop(context);
-                                }
-                              },
-                              child: const Text(
-                                'ADD',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -1739,6 +1640,7 @@ class _AddStockDialogState extends State<_AddStockDialog> {
   }
 }
 
+// Custom autocomplete field without search button
 class _StockAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
   final Function(String symbol, String companyName) onStockSelected;
@@ -1753,12 +1655,11 @@ class _StockAutocompleteField extends StatefulWidget {
 }
 
 class _StockAutocompleteFieldState extends State<_StockAutocompleteField> {
-  static const Color glassColor = Color(0x1AFFFFFF);
-  static const Color glassBorder = Color(0x33FFFFFF);
+  static const Color cardBg = Color(0xFF1A2138);
   static const Color accentCyan = Color(0xFF00F5FF);
   static const Color accentPurple = Color(0xFF8B5CF6);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textPrimary = Color(0xFFE2E8F0);
+  static const Color textSecondary = Color(0xFF94A3B8);
   
   final _focusNode = FocusNode();
   final _apiService = ApiService();
@@ -1859,16 +1760,16 @@ class _StockAutocompleteFieldState extends State<_StockAutocompleteField> {
           style: const TextStyle(color: textPrimary),
           decoration: InputDecoration(
             labelText: 'Ticker Symbol',
-            labelStyle: const TextStyle(color: textSecondary),
+            labelStyle: TextStyle(color: textSecondary),
             hintText: 'Search by symbol or company name',
             hintStyle: TextStyle(color: textSecondary.withOpacity(0.5)),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: glassBorder),
+              borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: glassBorder),
+              borderSide: BorderSide(color: textSecondary.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -1911,101 +1812,95 @@ class _StockAutocompleteFieldState extends State<_StockAutocompleteField> {
           },
         ),
         
+        // Suggestions List
         if (_showSuggestions && _suggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 8),
             constraints: const BoxConstraints(maxHeight: 200),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1A),
+              color: cardBg,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: accentCyan.withOpacity(0.3),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _suggestions.length,
-                  itemBuilder: (context, index) {
-                    final suggestion = _suggestions[index];
-                    return InkWell(
-                      onTap: () => _selectSuggestion(suggestion),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          border: index < _suggestions.length - 1
-                              ? Border(
-                                  bottom: BorderSide(
-                                    color: glassBorder,
-                                    width: 1,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _suggestions[index];
+                return InkWell(
+                  onTap: () => _selectSuggestion(suggestion),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      border: index < _suggestions.length - 1
+                          ? Border(
+                              bottom: BorderSide(
+                                color: textSecondary.withOpacity(0.1),
+                                width: 1,
                               ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    accentCyan.withOpacity(0.2),
-                                    accentPurple.withOpacity(0.2),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: accentCyan.withOpacity(0.3)),
-                              ),
-                              child: Text(
-                                suggestion.symbol,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: accentCyan,
-                                ),
-                              ),
+                            )
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                accentCyan.withOpacity(0.2),
+                                accentPurple.withOpacity(0.2),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                suggestion.companyName,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            suggestion.symbol,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: accentCyan,
                             ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 14,
-                              color: textSecondary.withOpacity(0.5),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            suggestion.companyName,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: textSecondary.withOpacity(0.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
       ],

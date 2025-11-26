@@ -80,52 +80,77 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadMarketData() async {
-    setState(() {
-      _isLoadingMarketData = true;
-    });
 
-    try {
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      setState(() {
-        _marketData = {
-          'indices': [
-            {'name': 'NIFTY 50', 'value': 24634.90, 'change': -19.80, 'changePercent': -0.08},
-            {'name': 'SENSEX', 'value': 80364.94, 'change': -61.52, 'changePercent': -0.08},
-            {'name': 'NIFTY BANK', 'value': 54461.00, 'change': 71.65, 'changePercent': 0.13},
-            {'name': 'S&P 500', 'value': 6660.02, 'change': 16.32, 'changePercent': 0.25},
-          ],
-          'commodities': [
-            {'name': 'Gold', 'value': 2642.50, 'change': 12.30, 'unit': 'USD/oz'},
-            {'name': 'Crude Oil', 'value': 68.25, 'change': -1.45, 'unit': 'USD/bbl'},
-            {'name': 'Silver', 'value': 31.85, 'change': 0.52, 'unit': 'USD/oz'},
-          ],
-          'news': [
-            {
-              'title': 'Fed holds rates steady, signals potential cut',
-              'time': '2 hours ago',
-              'source': 'Reuters'
-            },
-            {
-              'title': 'Tech stocks rally on AI optimism',
-              'time': '4 hours ago',
-              'source': 'Bloomberg'
-            },
-            {
-              'title': 'Crude oil drops on demand concerns',
-              'time': '5 hours ago',
-              'source': 'CNBC'
-            },
-          ],
-        };
-        _isLoadingMarketData = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingMarketData = false;
-      });
+Future<void> _loadMarketData() async {
+  setState(() {
+    _isLoadingMarketData = true;
+  });
+
+  try {
+    // Fetch real market data from backend
+    final data = await _apiService.getMarketOverview();
+    
+    setState(() {
+      _marketData = data;
+      _isLoadingMarketData = false;
+    });
+  } catch (e) {
+    print('Error loading market data: $e');
+    
+    // Fallback to placeholder data if API fails
+    setState(() {
+      _marketData = {
+        'indices': [
+          {'name': 'NIFTY 50', 'value': 24634.90, 'change': -19.80, 'changePercent': -0.08},
+          {'name': 'SENSEX', 'value': 80364.94, 'change': -61.52, 'changePercent': -0.08},
+          {'name': 'NIFTY BANK', 'value': 54461.00, 'change': 71.65, 'changePercent': 0.13},
+          {'name': 'S&P 500', 'value': 6660.02, 'change': 16.32, 'changePercent': 0.25},
+        ],
+        'commodities': [
+          {'name': 'Gold', 'value': 2642.50, 'change': 12.30, 'unit': 'USD/oz'},
+          {'name': 'Crude Oil', 'value': 68.25, 'change': -1.45, 'unit': 'USD/bbl'},
+          {'name': 'Silver', 'value': 31.85, 'change': 0.52, 'unit': 'USD/oz'},
+        ],
+        'news': [
+          {
+            'title': 'Fed holds rates steady, signals potential cut',
+            'time': '2 hours ago',
+            'source': 'Reuters'
+          },
+          {
+            'title': 'Tech stocks rally on AI optimism',
+            'time': '4 hours ago',
+            'source': 'Bloomberg'
+          },
+          {
+            'title': 'Crude oil drops on demand concerns',
+            'time': '5 hours ago',
+            'source': 'CNBC'
+          },
+        ],
+      };
+      _isLoadingMarketData = false;
+    });
+    
+    // Show error message to user
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Failed to load live market data. Showing cached data.'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
+  }
   }
 
   Future<void> _searchCompany([String? symbol]) async {
@@ -153,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = e.toString();
       });
       
-      // Show more helpful error messages
+      // error messages
       if (e.toString().contains('timed out')) {
         _showErrorSnackBar('Request timed out. The server might be waking up (Render free tier). Please try again in 30 seconds.');
       } else if (e.toString().contains('No internet')) {

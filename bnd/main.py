@@ -80,7 +80,7 @@ import time
 import random
 import os
 
-# CRITICAL: Set timezone environment variable BEFORE importing yfinance
+# CRITICAL: Setting timezone environment variable BEFORE importing yfinance
 os.environ['TZ'] = 'America/New_York'
 if hasattr(time, 'tzset'):
     time.tzset()
@@ -90,7 +90,7 @@ app = FastAPI(title="Stock Analysis & Backtest API", version="1.0.0")
 # Thread pool for parallel processing - REDUCED for rate limiting
 executor = ThreadPoolExecutor(max_workers=3)
 
-# Add CORS middleware for Flutter app
+# CORS middleware for Flutter app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -103,7 +103,7 @@ app.add_middleware(
 LAST_REQUEST_TIME = {}
 MIN_REQUEST_INTERVAL = 0.5  # 500ms between requests per symbol
 
-# Pydantic models (keeping your existing models)
+# Pydantic models 
 class StockSuggestion(BaseModel):
     symbol: str
     company_name: str
@@ -245,7 +245,7 @@ def rate_limited_download(symbol: str, start, end, max_retries=3):
     
     for attempt in range(max_retries):
         try:
-            # Add random delay to avoid burst requests
+            # Adding random delay to avoid burst requests
             if attempt > 0:
                 delay = random.uniform(1, 3) * (attempt + 1)
                 print(f"Retry {attempt + 1} for {symbol} after {delay:.2f}s delay")
@@ -253,12 +253,12 @@ def rate_limited_download(symbol: str, start, end, max_retries=3):
             
             LAST_REQUEST_TIME[symbol] = time.time()
             
-            # Try Ticker.history() first as it's more reliable
+            # Trying Ticker.history() first as it's more reliable
             print(f"Attempting to download {symbol} using Ticker.history()")
             ticker = yf.Ticker(symbol)
             df = ticker.history(start=start, end=end)
             
-            # If that fails or returns empty, try standard download
+            # If fails or returns empty, ->standard download
             if df.empty:
                 print(f"Ticker.history() returned empty for {symbol}, trying yf.download()")
                 df = yf.download(
@@ -300,10 +300,10 @@ def rate_limited_download(symbol: str, start, end, max_retries=3):
                     print(f"Max retries reached for {symbol} due to rate limiting")
                     return None
             elif 'delisted' in error_msg or 'timezone' in error_msg or 'yftz' in error_msg:
-                # These are known yfinance issues
+                # known yfinance issues
                 print(f"Known yfinance issue for {symbol}: {error_msg}")
                 if attempt < max_retries - 1:
-                    # Try once more with increased delay
+                    # Trying once more with increased delay
                     time.sleep(2)
                     continue
                 return None
@@ -336,7 +336,7 @@ def rate_limited_ticker_info(symbol: str, max_retries=3):
             
             ticker = yf.Ticker(symbol)
             
-            # Try to get info with error handling
+            # get info with error handling
             try:
                 info = ticker.info
             except Exception as info_error:
@@ -364,7 +364,7 @@ def rate_limited_ticker_info(symbol: str, max_retries=3):
                 else:
                     raise info_error
             
-            # Check if we got valid info
+            # Check if valid info
             if not info or len(info) < 2:
                 print(f"Invalid or empty info returned for {symbol}")
                 if attempt < max_retries - 1:
@@ -413,7 +413,6 @@ def rate_limited_ticker_info(symbol: str, max_retries=3):
 
 
 # ==================== STRATEGY CLASSES ====================
-# (Keep all your existing strategy classes unchanged)
 
 class RSIStrategy(bt.Strategy):
     params = (
@@ -514,7 +513,7 @@ class VolumeSpikeStrategy(bt.Strategy):
                 self.losing_trades += 1
 
 
-# Portfolio strategies (keeping your existing classes)
+# Portfolio strategies 
 class PortfolioRSIStrategy(bt.Strategy):
     params = (
         ("rsi_period", 14),
@@ -673,7 +672,6 @@ class PortfolioVolumeSpikeStrategy(bt.Strategy):
 
 
 # ==================== HELPER FUNCTIONS ====================
-# (Keep all your existing helper functions)
 
 def calculate_rsi(prices, window=14):
     try:
@@ -958,7 +956,7 @@ def get_stock_info(symbol: str):
         df = rate_limited_download(symbol, start_date, end_date)
         
         if df is None or df.empty:
-            # Check if this might be a Yahoo Finance API issue
+            # To check if this is Yahoo Finance issue 
             error_detail = (
                 f"Unable to fetch data for '{symbol}'. This could be due to:\n"
                 f"1. Invalid ticker symbol\n"
@@ -1296,7 +1294,7 @@ def process_single_stock(symbol: str, params: dict) -> Optional[dict]:
 async def screen_stocks(params: StockScreenerParams):
     """Stock screener with SEQUENTIAL processing to avoid rate limiting"""
     try:
-        # Use a smaller subset of stocks to avoid rate limits
+        # Using a smaller subset of stocks to avoid rate limits
         stock_symbols = list(POPULAR_STOCKS.keys())[:30]  # Limit to 30 stocks
         
         params_dict = {
@@ -1339,6 +1337,114 @@ async def screen_stocks(params: StockScreenerParams):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Stock screener failed: {str(e)}")
 
+
+@app.get("/market-overview")
+def get_market_overview():
+    """Get market overview data including indices, commodities, and news"""
+    try:
+        indices_symbols = {
+            '^NSEI': 'NIFTY 50',
+            '^BSESN': 'SENSEX',
+            '^NSEBANK': 'NIFTY BANK',
+            '^GSPC': 'S&P 500',
+        }
+        
+        indices = []
+        for symbol, name in indices_symbols.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="2d")
+                
+                if not hist.empty and len(hist) >= 2:
+                    current_price = float(hist['Close'].iloc[-1])
+                    previous_price = float(hist['Close'].iloc[-2])
+                    change = current_price - previous_price
+                    change_percent = (change / previous_price) * 100
+                    
+                    indices.append({
+                        'name': name,
+                        'value': round(current_price, 2),
+                        'change': round(change, 2),
+                        'changePercent': round(change_percent, 2)
+                    })
+            except Exception as e:
+                print(f"Error fetching {name}: {e}")
+                continue
+        
+        # Commodities 
+        commodities_symbols = {
+            'GC=F': {'name': 'Gold', 'unit': 'USD/oz'},
+            'CL=F': {'name': 'Crude Oil', 'unit': 'USD/bbl'},
+            'SI=F': {'name': 'Silver', 'unit': 'USD/oz'},
+        }
+        
+        commodities = []
+        for symbol, info in commodities_symbols.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="2d")
+                
+                if not hist.empty and len(hist) >= 2:
+                    current_price = float(hist['Close'].iloc[-1])
+                    previous_price = float(hist['Close'].iloc[-2])
+                    change = current_price - previous_price
+                    
+                    commodities.append({
+                        'name': info['name'],
+                        'value': round(current_price, 2),
+                        'change': round(change, 2),
+                        'unit': info['unit']
+                    })
+            except Exception as e:
+                print(f"Error fetching {info['name']}: {e}")
+                continue
+        
+        # Generate sample news 
+        from datetime import datetime, timedelta
+        
+        news = [
+            {
+                'title': 'Markets show mixed signals amid global economic data',
+                'time': _get_time_ago(datetime.now() - timedelta(hours=2)),
+                'source': 'Reuters'
+            },
+            {
+                'title': 'Tech stocks rally on AI optimism and earnings',
+                'time': _get_time_ago(datetime.now() - timedelta(hours=4)),
+                'source': 'Bloomberg'
+            },
+            {
+                'title': 'Central banks signal cautious approach to rate cuts',
+                'time': _get_time_ago(datetime.now() - timedelta(hours=5)),
+                'source': 'CNBC'
+            },
+        ]
+        
+        return {
+            'indices': indices,
+            'commodities': commodities,
+            'news': news,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error in market overview: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
+
+def _get_time_ago(dt: datetime) -> str:
+    """Convert datetime to human-readable time ago format"""
+    now = datetime.now()
+    diff = now - dt
+    
+    hours = int(diff.total_seconds() / 3600)
+    minutes = int((diff.total_seconds() % 3600) / 60)
+    
+    if hours > 0:
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    elif minutes > 0:
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    else:
+        return "Just now"
 
 @app.post("/clear-cache")
 def clear_screening_cache():

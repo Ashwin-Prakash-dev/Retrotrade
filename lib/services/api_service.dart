@@ -80,6 +80,35 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getMarketOverview() async {
+  try {
+    print('Fetching market overview');
+    print('URL: $baseUrl/market-overview');
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/market-overview'),
+      headers: _headers,
+    ).timeout(_timeout);
+
+    print('Market overview response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print('Market overview error: ${response.body}');
+      throw 'Failed to fetch market overview';
+    }
+  } on TimeoutException {
+    throw 'Request timed out. Please check your internet connection.';
+  } on SocketException {
+    throw 'No internet connection. Please check your network.';
+  } catch (e) {
+    print('Error in getMarketOverview: $e');
+    if (e is String) rethrow;
+    throw 'Failed to connect to server: $e';
+  }
+  }
+
   Future<Map<String, dynamic>> getStockInfo(String symbol) async {
     try {
       print('Fetching stock info for: $symbol');
