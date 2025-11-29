@@ -80,77 +80,81 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-
-Future<void> _loadMarketData() async {
-  setState(() {
-    _isLoadingMarketData = true;
-  });
-
-  try {
-    // Fetch real market data from backend
-    final data = await _apiService.getMarketOverview();
-    
+  Future<void> _loadMarketData() async {
     setState(() {
-      _marketData = data;
-      _isLoadingMarketData = false;
+      _isLoadingMarketData = true;
     });
-  } catch (e) {
-    print('Error loading market data: $e');
-    
-    // Fallback to placeholder data if API fails
-    setState(() {
-      _marketData = {
-        'indices': [
-          {'name': 'NIFTY 50', 'value': 24634.90, 'change': -19.80, 'changePercent': -0.08},
-          {'name': 'SENSEX', 'value': 80364.94, 'change': -61.52, 'changePercent': -0.08},
-          {'name': 'NIFTY BANK', 'value': 54461.00, 'change': 71.65, 'changePercent': 0.13},
-          {'name': 'S&P 500', 'value': 6660.02, 'change': 16.32, 'changePercent': 0.25},
-        ],
-        'commodities': [
-          {'name': 'Gold', 'value': 2642.50, 'change': 12.30, 'unit': 'USD/oz'},
-          {'name': 'Crude Oil', 'value': 68.25, 'change': -1.45, 'unit': 'USD/bbl'},
-          {'name': 'Silver', 'value': 31.85, 'change': 0.52, 'unit': 'USD/oz'},
-        ],
-        'news': [
-          {
-            'title': 'Fed holds rates steady, signals potential cut',
-            'time': '2 hours ago',
-            'source': 'Reuters'
+
+    try {
+      // Fetch real market data from backend
+      final data = await _apiService.getMarketOverview();
+      setState(() {
+        _marketData = data;
+        _isLoadingMarketData = false;
+      });
+    } catch (e) {
+      print('Error loading market data: $e');
+      // Fallback to placeholder data if API fails
+      setState(() {
+        _marketData = {
+          'indices': [
+            {'name': 'NIFTY 50', 'value': 24634.90, 'change': -19.80, 'changePercent': -0.08},
+            {'name': 'SENSEX', 'value': 80364.94, 'change': -61.52, 'changePercent': -0.08},
+            {'name': 'NIFTY SMALL CAP', 'value': 18542.30, 'change': 125.45, 'changePercent': 0.68},
+            {'name': 'NIFTY MIDCAP', 'value': 57823.15, 'change': -89.20, 'changePercent': -0.15},
+            {'name': 'NIFTY BANK', 'value': 54461.00, 'change': 71.65, 'changePercent': 0.13},
+            {'name': 'S&P 500', 'value': 6660.02, 'change': 16.32, 'changePercent': 0.25},
+          ],
+          'vix': {
+            'value': 14.25,
+            'change': -0.35,
+            'changePercent': -2.39,
           },
-          {
-            'title': 'Tech stocks rally on AI optimism',
-            'time': '4 hours ago',
-            'source': 'Bloomberg'
-          },
-          {
-            'title': 'Crude oil drops on demand concerns',
-            'time': '5 hours ago',
-            'source': 'CNBC'
-          },
-        ],
-      };
-      _isLoadingMarketData = false;
-    });
-    
-    // Show error message to user
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.warning_amber, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Failed to load live market data. Showing cached data.'),
-              ),
-            ],
+          'commodities': [
+            {'name': 'Gold', 'value': 2642.50, 'change': 12.30, 'unit': 'USD/oz'},
+            {'name': 'Crude Oil', 'value': 68.25, 'change': -1.45, 'unit': 'USD/bbl'},
+            {'name': 'Silver', 'value': 31.85, 'change': 0.52, 'unit': 'USD/oz'},
+          ],
+          'news': [
+            {
+              'title': 'Fed holds rates steady, signals potential cut',
+              'time': '2 hours ago',
+              'source': 'Reuters'
+            },
+            {
+              'title': 'Tech stocks rally on AI optimism',
+              'time': '4 hours ago',
+              'source': 'Bloomberg'
+            },
+            {
+              'title': 'Crude oil drops on demand concerns',
+              'time': '5 hours ago',
+              'source': 'CNBC'
+            },
+          ],
+        };
+        _isLoadingMarketData = false;
+      });
+
+      // Show error message to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.white),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Failed to load live market data. Showing cached data.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
+            duration: const Duration(seconds: 3),
           ),
-          backgroundColor: Colors.orange.shade700,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+        );
+      }
     }
-  }
   }
 
   Future<void> _searchCompany([String? symbol]) async {
@@ -167,7 +171,7 @@ Future<void> _loadMarketData() async {
       print('Searching for stock: $searchTerm');
       final data = await _apiService.getStockInfo(searchTerm.toUpperCase());
       print('Stock data received: ${data['symbol']}');
-      
+
       setState(() {
         _stockData = data;
         _currentSymbol = searchTerm.toUpperCase();
@@ -177,7 +181,7 @@ Future<void> _loadMarketData() async {
       setState(() {
         _error = e.toString();
       });
-      
+
       // error messages
       if (e.toString().contains('timed out')) {
         _showErrorSnackBar('Request timed out. The server might be waking up (Render free tier). Please try again in 30 seconds.');
@@ -195,7 +199,7 @@ Future<void> _loadMarketData() async {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -254,7 +258,7 @@ Future<void> _loadMarketData() async {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [accentCyan, accentPurple],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -272,7 +276,7 @@ Future<void> _loadMarketData() async {
             ),
             const SizedBox(width: 12),
             const Text(
-              'RETROTRADE',
+              'DASHBOARD',
               style: TextStyle(
                 color: textPrimary,
                 fontWeight: FontWeight.w300,
@@ -287,7 +291,7 @@ Future<void> _loadMarketData() async {
         actions: [
           // Connection Test Button
           IconButton(
-            icon: Icon(Icons.network_check, color: accentCyan),
+            icon: const Icon(Icons.network_check, color: accentCyan),
             onPressed: () {
               Navigator.push(
                 context,
@@ -300,19 +304,19 @@ Future<void> _loadMarketData() async {
           ),
           if (_stockData != null)
             IconButton(
-              icon: Icon(Icons.home_outlined, color: accentCyan),
+              icon: const Icon(Icons.home_outlined, color: accentCyan),
               onPressed: _clearSearch,
               tooltip: 'Back to Home',
             ),
           IconButton(
-            icon: Icon(Icons.refresh_outlined, color: accentCyan),
+            icon: const Icon(Icons.refresh_outlined, color: accentCyan),
             onPressed: _loadMarketData,
             tooltip: 'Refresh Market Data',
           ),
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -329,7 +333,6 @@ Future<void> _loadMarketData() async {
                 onSearch: () => _searchCompany(),
                 isLoading: _isLoading,
               ),
-
               const SizedBox(height: 16),
 
               // Results
@@ -350,12 +353,12 @@ Future<void> _loadMarketData() async {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.warning_amber_rounded, color: accentRed),
+                                    const Icon(Icons.warning_amber_rounded, color: accentRed),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         _error!,
-                                        style: TextStyle(color: accentRed, fontWeight: FontWeight.w500),
+                                        style: const TextStyle(color: accentRed, fontWeight: FontWeight.w500),
                                       ),
                                     ),
                                   ],
@@ -463,7 +466,7 @@ Future<void> _loadMarketData() async {
     if (_isLoadingMarketData) {
       return Container(
         padding: const EdgeInsets.all(48.0),
-        child: Center(
+        child: const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation(accentCyan),
             strokeWidth: 3,
@@ -471,90 +474,84 @@ Future<void> _loadMarketData() async {
         ),
       );
     }
-
+    
+    // Extract Indian market indices data
+    final indices = _marketData['indices'] as List? ?? [];
+    final vixData = _marketData['vix'] ?? {'value': 0.0, 'change': 0.0, 'changePercent': 0.0};
+    
+    // Define featured Indian indices to show
+    final featuredIndices = [
+      'NIFTY 50',
+      'SENSEX',
+      'NIFTY SMALL CAP',
+      'NIFTY MIDCAP',
+      'NIFTY BANK',
+    ];
+    
+    // Build list of cards to show
+    final indexCards = <Map<String, dynamic>>[];
+    
+    // Add featured indices
+    for (final indexName in featuredIndices) {
+      final indexData = indices.firstWhere(
+        (item) => item['name'] == indexName,
+        orElse: () => {'name': indexName, 'value': 0.0, 'change': 0.0, 'changePercent': 0.0},
+      );
+      indexCards.add(indexData);
+    }
+    
+    // Add India VIX at the end
+    indexCards.add({
+      'name': 'INDIA VIX',
+      'value': vixData['value'],
+      'change': vixData['change'],
+      'changePercent': vixData['changePercent'],
+    });
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Welcome Message
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [accentCyan.withOpacity(0.15), accentPurple.withOpacity(0.15)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: accentCyan.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [accentCyan, accentPurple],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentCyan.withOpacity(0.4),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.wb_sunny_outlined, color: Colors.white, size: 28),
+        _buildSectionHeader('INDIAN INDICES', Icons.flag_outlined),
+        const SizedBox(height: 12),
+        // Featured Indian Indices - Horizontal Scroll
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: indexCards.length,
+            itemBuilder: (context, index) {
+              final item = indexCards[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index < indexCards.length - 1 ? 12 : 0,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'GOOD ${_getGreeting().toUpperCase()}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Real-time market intelligence at your fingertips',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: textSecondary,
-                          fontWeight: FontWeight.w300,
-                        ),
-                      ),
-                    ],
+                child: SizedBox(
+                  width: 170,
+                  child: _buildIndexCard(
+                    title: item['name'],
+                    value: item['value'],
+                    change: item['change'],
+                    changePercent: item['changePercent'],
+                    icon: Icons.trending_up,
+                    gradientColors: const [accentCyan, accentPurple],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
-
         const SizedBox(height: 24),
 
         // Major Indices
         _buildSectionHeader('GLOBAL INDICES', Icons.trending_up),
         const SizedBox(height: 12),
         _buildIndicesGrid(),
-
         const SizedBox(height: 24),
 
         // Commodities
         _buildSectionHeader('COMMODITIES', Icons.diamond_outlined),
         const SizedBox(height: 12),
         _buildCommoditiesCard(),
-
         const SizedBox(height: 24),
 
         // Economic News
@@ -562,6 +559,93 @@ Future<void> _loadMarketData() async {
         const SizedBox(height: 12),
         _buildNewsCard(),
       ],
+    );
+  }
+
+  Widget _buildIndexCard({
+    required String title,
+    required dynamic value,
+    required dynamic change,
+    required dynamic changePercent,
+    required IconData icon,
+    required List<Color> gradientColors,
+  }) {
+    final isPositive = (change ?? 0.0) >= 0;
+    final displayValue = (value is num) ? value.toDouble() : 0.0;
+    final displayChange = (change is num) ? change.toDouble() : 0.0;
+    final displayChangePercent = (changePercent is num) ? changePercent.toDouble() : 0.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPositive ? accentGreen.withOpacity(0.2) : accentRed.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isPositive ? accentGreen : accentRed).withOpacity(0.1),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (isPositive ? accentGreen : accentRed).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(
+                    isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                    size: 12,
+                    color: isPositive ? accentGreen : accentRed,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              displayValue.toStringAsFixed(2),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: textPrimary,
+              ),
+            ),
+            Text(
+              '${displayChange.toStringAsFixed(2)} (${displayChangePercent.toStringAsFixed(2)}%)',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isPositive ? accentGreen : accentRed,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -595,8 +679,8 @@ Future<void> _loadMarketData() async {
   }
 
   Widget _buildIndicesGrid() {
-    final indices = _marketData['indices'] as List<dynamic>? ?? [];
-    
+    final indices = _marketData['indices'] as List? ?? [];
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -610,15 +694,13 @@ Future<void> _loadMarketData() async {
       itemBuilder: (context, index) {
         final item = indices[index];
         final isPositive = (item['change'] ?? 0.0) >= 0;
-        
+
         return Container(
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isPositive 
-                  ? accentGreen.withOpacity(0.2)
-                  : accentRed.withOpacity(0.2),
+              color: isPositive ? accentGreen.withOpacity(0.2) : accentRed.withOpacity(0.2),
               width: 1,
             ),
             boxShadow: [
@@ -690,8 +772,8 @@ Future<void> _loadMarketData() async {
   }
 
   Widget _buildCommoditiesCard() {
-    final commodities = _marketData['commodities'] as List<dynamic>? ?? [];
-    
+    final commodities = _marketData['commodities'] as List? ?? [];
+
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
@@ -712,7 +794,7 @@ Future<void> _loadMarketData() async {
         itemBuilder: (context, index) {
           final item = commodities[index];
           final isPositive = (item['change'] ?? 0.0) >= 0;
-          
+
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -747,7 +829,7 @@ Future<void> _loadMarketData() async {
                       const SizedBox(height: 2),
                       Text(
                         item['unit'],
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
                           color: textSecondary,
                         ),
@@ -796,8 +878,8 @@ Future<void> _loadMarketData() async {
   }
 
   Widget _buildNewsCard() {
-    final news = _marketData['news'] as List<dynamic>? ?? [];
-    
+    final news = _marketData['news'] as List? ?? [];
+
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
@@ -817,7 +899,7 @@ Future<void> _loadMarketData() async {
         ),
         itemBuilder: (context, index) {
           final item = news[index];
-          
+
           return InkWell(
             onTap: () {
               // TODO: Open news article
@@ -835,7 +917,7 @@ Future<void> _loadMarketData() async {
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.article_outlined,
                       color: accentPurple,
                       size: 20,
@@ -867,7 +949,7 @@ Future<void> _loadMarketData() async {
                               ),
                               child: Text(
                                 item['source'],
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: accentCyan,
                                   fontWeight: FontWeight.w600,
@@ -878,7 +960,7 @@ Future<void> _loadMarketData() async {
                             const SizedBox(width: 8),
                             Text(
                               '• ${item['time']}',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: textSecondary,
                               ),
@@ -913,13 +995,6 @@ Future<void> _loadMarketData() async {
       default:
         return Icons.bar_chart;
     }
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
   }
 
   @override
