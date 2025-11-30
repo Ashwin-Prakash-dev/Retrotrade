@@ -462,105 +462,91 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMarketOverview() {
-    if (_isLoadingMarketData) {
-      return Container(
-        padding: const EdgeInsets.all(48.0),
-        child: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation(accentCyan),
-            strokeWidth: 3,
-          ),
+Widget _buildMarketOverview() {
+  if (_isLoadingMarketData) {
+    return Container(
+      padding: const EdgeInsets.all(48.0),
+      child: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation(accentCyan),
+          strokeWidth: 3,
         ),
-      );
-    }
-    
-    // Extract Indian market indices data
-    final indices = _marketData['indices'] as List? ?? [];
-    final vixData = _marketData['vix'] ?? {'value': 0.0, 'change': 0.0, 'changePercent': 0.0};
-    
-    // Define featured Indian indices to show
-    final featuredIndices = [
-      'NIFTY 50',
-      'SENSEX',
-      'NIFTY SMALL CAP',
-      'NIFTY MIDCAP',
-      'NIFTY BANK',
-    ];
-    
-    // Build list of cards to show
-    final indexCards = <Map<String, dynamic>>[];
-    
-    // Add featured indices
-    for (final indexName in featuredIndices) {
-      final indexData = indices.firstWhere(
-        (item) => item['name'] == indexName,
-        orElse: () => {'name': indexName, 'value': 0.0, 'change': 0.0, 'changePercent': 0.0},
-      );
-      indexCards.add(indexData);
-    }
-    
-    // Add India VIX at the end
-    indexCards.add({
-      'name': 'INDIA VIX',
-      'value': vixData['value'],
-      'change': vixData['change'],
-      'changePercent': vixData['changePercent'],
-    });
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('INDIAN INDICES', Icons.flag_outlined),
-        const SizedBox(height: 12),
-        // Featured Indian Indices - Horizontal Scroll
-        SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: indexCards.length,
-            itemBuilder: (context, index) {
-              final item = indexCards[index];
-              return Padding(
-                padding: EdgeInsets.only(
-                  right: index < indexCards.length - 1 ? 12 : 0,
-                ),
-                child: SizedBox(
-                  width: 170,
-                  child: _buildIndexCard(
-                    title: item['name'],
-                    value: item['value'],
-                    change: item['change'],
-                    changePercent: item['changePercent'],
-                    icon: Icons.trending_up,
-                    gradientColors: const [accentCyan, accentPurple],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Major Indices
-        _buildSectionHeader('GLOBAL INDICES', Icons.trending_up),
-        const SizedBox(height: 12),
-        _buildIndicesGrid(),
-        const SizedBox(height: 24),
-
-        // Commodities
-        _buildSectionHeader('COMMODITIES', Icons.diamond_outlined),
-        const SizedBox(height: 12),
-        _buildCommoditiesCard(),
-        const SizedBox(height: 24),
-
-        // Economic News
-        _buildSectionHeader('MARKET PULSE', Icons.newspaper_outlined),
-        const SizedBox(height: 12),
-        _buildNewsCard(),
-      ],
+      ),
     );
   }
+  
+  final indianIndices = _marketData['indian_indices'] as List? ?? [];
+  final globalIndices = _marketData['indices'] as List? ?? [];
+  final vixData = _marketData['vix'] ?? {'value': 0.0, 'change': 0.0, 'changePercent': 0.0};
+  
+  final indexCards = <Map<String, dynamic>>[];
+  
+  // Indian indices
+  for (final indexData in indianIndices) {
+    indexCards.add(indexData);
+  }
+  
+  // India VIX 
+  indexCards.add({
+    'name': 'INDIA VIX',
+    'value': vixData['value'],
+    'change': vixData['change'],
+    'changePercent': vixData['changePercent'],
+  });
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionHeader('INDIAN INDICES', Icons.flag_outlined),
+      const SizedBox(height: 12),
+      // Featured Indian Indices - Horizontal Scroll
+      SizedBox(
+        height: 100,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: indexCards.length,
+          itemBuilder: (context, index) {
+            final item = indexCards[index];
+            return Padding(
+              padding: EdgeInsets.only(
+                right: index < indexCards.length - 1 ? 12 : 0,
+              ),
+              child: SizedBox(
+                width: 170,
+                child: _buildIndexCard(
+                  title: item['name'],
+                  value: item['value'],
+                  change: item['change'],
+                  changePercent: item['changePercent'],
+                  icon: Icons.trending_up,
+                  gradientColors: const [accentCyan, accentPurple],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      const SizedBox(height: 24),
+
+      // Global Indices Grid
+      _buildSectionHeader('GLOBAL INDICES', Icons.trending_up),
+      const SizedBox(height: 12),
+      _buildIndicesGrid(globalIndices),
+      const SizedBox(height: 24),
+
+      // Commodities
+      _buildSectionHeader('COMMODITIES', Icons.diamond_outlined),
+      const SizedBox(height: 12),
+      _buildCommoditiesCard(),
+      const SizedBox(height: 24),
+
+      // Economic News
+      _buildSectionHeader('MARKET PULSE', Icons.newspaper_outlined),
+      const SizedBox(height: 12),
+      _buildNewsCard(),
+    ],
+  );
+}
 
   Widget _buildIndexCard({
     required String title,
@@ -678,98 +664,116 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildIndicesGrid() {
-    final indices = _marketData['indices'] as List? ?? [];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.5,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+Widget _buildIndicesGrid(List<dynamic> indices) {
+  if (indices.isEmpty) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentCyan.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      itemCount: indices.length,
-      itemBuilder: (context, index) {
-        final item = indices[index];
-        final isPositive = (item['change'] ?? 0.0) >= 0;
+      child: Center(
+        child: Text(
+          'No global indices data available',
+          style: TextStyle(color: textSecondary),
+        ),
+      ),
+    );
+  }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isPositive ? accentGreen.withOpacity(0.2) : accentRed.withOpacity(0.2),
-              width: 1,
+  return GridView.builder(
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 2,
+      childAspectRatio: 1.5,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+    ),
+    itemCount: indices.length,
+    itemBuilder: (context, index) {
+      final item = indices[index];
+      final isPositive = (item['change'] ?? 0.0) >= 0;
+
+      return Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isPositive ? accentGreen.withOpacity(0.2) : accentRed.withOpacity(0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isPositive ? accentGreen : accentRed).withOpacity(0.1),
+              blurRadius: 8,
+              spreadRadius: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: (isPositive ? accentGreen : accentRed).withOpacity(0.1),
-                blurRadius: 8,
-                spreadRadius: 1,
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item['name'],
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (isPositive ? accentGreen : accentRed).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Icon(
+                      isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 12,
+                      color: isPositive ? accentGreen : accentRed,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                item['value'].toStringAsFixed(2),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                ),
+              ),
+              Text(
+                '${item['change'].toStringAsFixed(2)} (${item['changePercent'].toStringAsFixed(2)}%)',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isPositive ? accentGreen : accentRed,
+                ),
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item['name'],
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: textSecondary,
-                          letterSpacing: 0.5,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: (isPositive ? accentGreen : accentRed).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Icon(
-                        isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                        size: 12,
-                        color: isPositive ? accentGreen : accentRed,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  item['value'].toStringAsFixed(2),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
-                ),
-                Text(
-                  '${item['change'].toStringAsFixed(2)} (${item['changePercent'].toStringAsFixed(2)}%)',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isPositive ? accentGreen : accentRed,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildCommoditiesCard() {
     final commodities = _marketData['commodities'] as List? ?? [];

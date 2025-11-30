@@ -1357,19 +1357,30 @@ def _get_time_ago(dt: datetime) -> str:
 def get_market_overview():
     """Get market overview data including indices, commodities, and news"""
     try:
-        # Major indices
-        indices_symbols = {
+        # Indian Indices
+        indian_indices_symbols = {
+            '^NSEI': 'NIFTY 50',
+            '^BSESN': 'SENSEX',
+            '^NIFTYSMLCAP100.NS': 'NIFTY SMALL CAP',
+            '^NIFTYMIDCAP100.NS': 'NIFTY MIDCAP',
+            '^NSEBANK': 'NIFTY BANK',
+        }
+        
+        # Global Indices
+        global_indices_symbols = {
             '^GSPC': 'S&P 500',
             '^STOXX50E': 'EURO STOXX 50',
             '^N225': 'NIKKEI 225',
             '^HSI': 'HANG SENG INDEX',
         }
         
-        indices = []
-        for symbol, name in indices_symbols.items():
+        # Indian Indices
+        indian_indices = []
+        for symbol, name in indian_indices_symbols.items():
             try:
+                print(f"Fetching {name} ({symbol})...")
                 ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="2d")
+                hist = ticker.history(period="5d")
                 
                 if not hist.empty and len(hist) >= 2:
                     current_price = float(hist['Close'].iloc[-1])
@@ -1377,26 +1388,92 @@ def get_market_overview():
                     change = current_price - previous_price
                     change_percent = (change / previous_price) * 100
                     
-                    indices.append({
+                    indian_indices.append({
                         'name': name,
                         'value': round(current_price, 2),
                         'change': round(change, 2),
                         'changePercent': round(change_percent, 2)
                     })
-                    print(f"✓ Fetched {name}: ${current_price:.2f}")
+                    print(f"✓ Fetched {name}: {current_price:.2f}")
+                elif not hist.empty:
+                    current_price = float(hist['Close'].iloc[-1])
+                    indian_indices.append({
+                        'name': name,
+                        'value': round(current_price, 2),
+                        'change': 0.0,
+                        'changePercent': 0.0
+                    })
+                    print(f"⚠ Fetched {name} (single day data): {current_price:.2f}")
             except Exception as e:
-                print(f"✗ Error fetching {name}: {e}")
+                print(f"✗ Error fetching {name} ({symbol}): {type(e).__name__}: {e}")
                 continue
         
-        # Commodities 
+        # Fetch Global Indices
+        global_indices = []
+        for symbol, name in global_indices_symbols.items():
+            try:
+                print(f"Fetching {name} ({symbol})...")
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="5d")
+                
+                if not hist.empty and len(hist) >= 2:
+                    current_price = float(hist['Close'].iloc[-1])
+                    previous_price = float(hist['Close'].iloc[-2])
+                    change = current_price - previous_price
+                    change_percent = (change / previous_price) * 100
+                    
+                    global_indices.append({
+                        'name': name,
+                        'value': round(current_price, 2),
+                        'change': round(change, 2),
+                        'changePercent': round(change_percent, 2)
+                    })
+                    print(f"✓ Fetched {name}: {current_price:.2f}")
+                elif not hist.empty:
+                    current_price = float(hist['Close'].iloc[-1])
+                    global_indices.append({
+                        'name': name,
+                        'value': round(current_price, 2),
+                        'change': 0.0,
+                        'changePercent': 0.0
+                    })
+                    print(f"⚠ Fetched {name} (single day data): {current_price:.2f}")
+            except Exception as e:
+                print(f"✗ Error fetching {name} ({symbol}): {type(e).__name__}: {e}")
+                continue
+        
+        # Add India VIX
+        try:
+            print("Fetching India VIX...")
+            vix_ticker = yf.Ticker('^INDIAVIX')
+            vix_hist = vix_ticker.history(period="5d")
+            
+            if not vix_hist.empty and len(vix_hist) >= 2:
+                vix_current = float(vix_hist['Close'].iloc[-1])
+                vix_previous = float(vix_hist['Close'].iloc[-2])
+                vix_change = vix_current - vix_previous
+                vix_change_percent = (vix_change / vix_previous) * 100
+                
+                vix_data = {
+                    'value': round(vix_current, 2),
+                    'change': round(vix_change, 2),
+                    'changePercent': round(vix_change_percent, 2),
+                }
+                print(f"✓ Fetched India VIX: {vix_current:.2f}")
+            else:
+                vix_data = {'value': 0.0, 'change': 0.0, 'changePercent': 0.0}
+                print("⚠ India VIX data unavailable")
+        except Exception as e:
+            print(f"✗ Error fetching India VIX: {e}")
+            vix_data = {'value': 0.0, 'change': 0.0, 'changePercent': 0.0}
+        
+        # Commodities (keeping your existing logic)
         commodities_configs = [
-            # Format 1: 
             {
                 'GC=F': {'name': 'Gold', 'unit': 'USD/oz'},
                 'CL=F': {'name': 'Crude Oil', 'unit': 'USD/bbl'},
                 'SI=F': {'name': 'Silver', 'unit': 'USD/oz'},
             },
-            # Format 2: 
             {
                 'GLD': {'name': 'Gold', 'unit': 'USD/oz'},
                 'USO': {'name': 'Crude Oil', 'unit': 'USD/bbl'},
@@ -1405,16 +1482,14 @@ def get_market_overview():
         ]
         
         commodities = []
-        
         for config in commodities_configs:
-            if commodities:  # If got data, stop trying
+            if commodities:
                 break
                 
             for symbol, info in config.items():
                 try:
                     print(f"Trying commodity: {info['name']} ({symbol})")
                     ticker = yf.Ticker(symbol)
-                    
                     hist = ticker.history(period="5d")
                     
                     if not hist.empty and len(hist) >= 2:
@@ -1431,7 +1506,6 @@ def get_market_overview():
                         commodities.append(commodity_data)
                         print(f"✓ Fetched {info['name']}: ${current_price:.2f}")
                     elif not hist.empty:
-                        # Only one day of data
                         current_price = float(hist['Close'].iloc[-1])
                         commodity_data = {
                             'name': info['name'],
@@ -1445,36 +1519,23 @@ def get_market_overview():
                     print(f"✗ Error with {symbol}: {type(e).__name__}")
                     continue
         
-        # fallback data
+        # Fallback commodity data if nothing works
         if not commodities:
             print("⚠ Using fallback commodities data")
             commodities = [
-                {
-                    'name': 'Gold',
-                    'value': 2642.50,
-                    'change': 12.30,
-                    'unit': 'USD/oz'
-                },
-                {
-                    'name': 'Crude Oil',
-                    'value': 68.25,
-                    'change': -1.45,
-                    'unit': 'USD/bbl'
-                },
-                {
-                    'name': 'Silver',
-                    'value': 31.85,
-                    'change': 0.52,
-                    'unit': 'USD/oz'
-                }
+                {'name': 'Gold', 'value': 2642.50, 'change': 12.30, 'unit': 'USD/oz'},
+                {'name': 'Crude Oil', 'value': 68.25, 'change': -1.45, 'unit': 'USD/bbl'},
+                {'name': 'Silver', 'value': 31.85, 'change': 0.52, 'unit': 'USD/oz'}
             ]
         
         print(f"\n=== MARKET DATA SUMMARY ===")
-        print(f"Indices: {len(indices)} items")
+        print(f"Indian Indices: {len(indian_indices)} items")
+        print(f"Global Indices: {len(global_indices)} items")
+        print(f"VIX Data: {vix_data}")
         print(f"Commodities: {len(commodities)} items")
         print(f"===========================\n")
         
-        # sample news 
+        # Sample news
         news = [
             {
                 'title': 'Markets show mixed signals amid global economic data',
@@ -1494,7 +1555,9 @@ def get_market_overview():
         ]
         
         response_data = {
-            'indices': indices,
+            'indian_indices': indian_indices,
+            'indices': global_indices,
+            'vix': vix_data,
             'commodities': commodities,
             'news': news,
             'timestamp': datetime.now().isoformat()
