@@ -918,23 +918,29 @@ class _StockScreenerScreenState extends State<StockScreenerScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'PRICE RANGE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: textSecondary,
-                          letterSpacing: 1,
+                      Expanded(
+                        child: Text(
+                          'PRICE RANGE',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: textSecondary,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
-                      Text(
-                        '\${_priceMin.round()} - \${_priceMax.round()}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: accentCyan,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '\${_priceMin.round()} - \${_priceMax.round()}',
+                          textAlign: TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: accentCyan,
+                          ),
                         ),
                       ),
                     ],
