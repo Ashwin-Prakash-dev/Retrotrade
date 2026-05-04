@@ -206,6 +206,11 @@ Buys when volume exceeds a multiple of the rolling average volume, then holds fo
 
 ---
 
+<img width="338" height="748" alt="Screenshot 2025-11-30 224612" src="https://github.com/user-attachments/assets/e95bd470-d6f5-460b-9f1d-2067410ae54c" />
+<img width="322" height="682" alt="Screenshot 2025-12-01 001132" src="https://github.com/user-attachments/assets/4ce81e98-f8b4-4587-8ba1-79ee9a765797" />
+<img width="361" height="736" alt="Screenshot 2025-11-30 195013" src="https://github.com/user-attachments/assets/c110969a-f8ac-4942-88f8-c75003bf0401" />
+<img width="362" height="727" alt="Screenshot 2025-11-30 195041" src="https://github.com/user-attachments/assets/e06467f6-07bd-49ca-baed-765e4eda25f8" />
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
